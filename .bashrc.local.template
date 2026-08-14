@@ -4,12 +4,17 @@
 # API Keys
 export GEMINI_API_KEY="your_gemini_api_key_here"
 export DEEPSEEK_API_KEY="your_deepseek_api_key_here"
+export OPENROUTER_API_KEY="your_openrouter_api_key_here"
+
+# Custom LLM models
+# This model is free
+export OPENROUTER_MODEL="poolside/laguna-s-2.1:free"
+
+# Custom GitReview tool settings
+export GIT_REVIEW_PROVIDER="openrouter"
 
 # Custom project root path
 export PROJECTS_ROOT="/c/dev/projects"
-
-# Custom GitReview tool settings
-export GIT_REVIEW_PROVIDER="gemini"
 
 # ==============================================================================
 # SSH KEYS CONFIGURATION
