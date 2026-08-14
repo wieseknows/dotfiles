@@ -24,17 +24,20 @@ dotfiles/
 
 ## Quick Start
 
-1. Clone the repository:
-   git clone https://github.com/wieseknows/dotfiles.git ~/dotfiles
-   cd ~/dotfiles
+1. Clone the repository into any directory of your choice and enter it:
+
+   git clone https://github.com/wieseknows/dotfiles.git
+   cd dotfiles
 
 2. Create your local config files from templates:
+
    cp .bashrc.local.template .bashrc.local
    cp .gitconfig.local.template .gitconfig.local
 
 3. Fill in your personal credentials and settings:
 
    - Edit `.bashrc.local` to set your API keys and SSH key paths:
+
      SSH_KEYS=(
          "C:/dev/private_key"
          "$HOME/.ssh/id_ed25519_personal"
@@ -42,14 +45,17 @@ dotfiles/
      export GEMINI_API_KEY="your_api_key_here"
 
    - Edit `.gitconfig.local` to set your Git identity:
+
      [user]
          name = Your Name
          email = your.email@example.com
 
 4. Run the installation script:
+
    ./install.sh
 
 5. Apply the configuration:
+
    source ~/.bashrc
 
 ## Key Commands
