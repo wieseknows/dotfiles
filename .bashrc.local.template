@@ -27,3 +27,20 @@ SSH_KEYS=(
 
 # Machine-specific aliases
 # alias work='cd /c/work/projects'
+
+# ==============================================================================
+# PROJECT NAVIGATION CONFIGURATION
+# ==============================================================================
+# Base directory for all your projects
+export PROJECTS_ROOT="/c/dev/projects"
+
+# Declare associative array globally (-g)
+declare -g -A PROJECT_PATHS=(
+    ["syn"]="synthesis_newdesign/web"
+    ["syn_old"]="synthesis_old/web"
+    ["syn_pub_uat"]="synthesis_publish_uat/web"
+    ["syn_pub_live"]="synthesis_publish_live/web"
+    ["oms"]="oms/web"
+    ["pin"]="pinergy/web"
+    ["dop"]="pinergy/web"
+)

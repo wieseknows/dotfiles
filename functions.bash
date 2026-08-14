@@ -10,46 +10,52 @@ gitwho() {
     git config --list --show-origin | grep user | sed 's/^/  /'
 }
 
-# Dynamic project navigation - quickly jump to project directories
+# Dynamic project navigation - quickly jump to configured project directories
 proj() {
-    local target_dir=""
-    
-    case "$1" in
-        syn|syn_new)
-            target_dir="$PROJECTS_ROOT/synthesis_newdesign/web"
-            ;;
-        syn_old)
-            target_dir="$PROJECTS_ROOT/synthesis_old/web"
-            ;;
-        syn_pub_uat)
-            target_dir="$PROJECTS_ROOT/synthesis_publish_uat/web"
-            ;;
-        syn_pub_live)
-            target_dir="$PROJECTS_ROOT/synthesis_publish_live/web"
-            ;;
-        oms)
-            target_dir="$PROJECTS_ROOT/oms/web"
-            ;;
-        pin|dop)
-            target_dir="$PROJECTS_ROOT/pinergy/web"
-            ;;
-        *)
-            echo "Usage: proj {syn|syn_new|syn_old|syn_pub_uat|syn_pub_live|oms|pin|dop}"
-            echo ""
-            echo "Examples:"
-            echo "  proj syn        - Go to synthesis_newdesign/web"
-            echo "  proj syn_old    - Go to synthesis_old/web"
-            echo "  proj oms        - Go to oms/web"
-            echo "  proj pin        - Go to pinergy/web (same as dop)"
+    if [ -z "$PROJECTS_ROOT" ]; then
+        echo "❌ Error: \$PROJECTS_ROOT is not set. Please define it in ~/.bashrc.local"
+        return 1
+    fi
+
+    # Helper to display available projects
+    _proj_usage() {
+        echo "Usage: proj <project_alias>"
+        echo ""
+        echo "Available projects in \$PROJECTS_ROOT ($PROJECTS_ROOT):"
+        
+        # Get all keys from associative array
+        local keys=("${!PROJECT_PATHS[@]}")
+        
+        if [ ${#keys[@]} -gt 0 ]; then
+            for key in "${keys[@]}"; do
+                printf "  %-15s -> %s\n" "$key" "${PROJECT_PATHS[$key]}"
+            done
+        else
+            echo "  (No projects configured in PROJECT_PATHS array in ~/.bashrc.local)"
+        fi
+    }
+
+    if [ -z "$1" ]; then
+        _proj_usage
+        return 1
+    fi
+
+    local alias_name="$1"
+    local relative_path="${PROJECT_PATHS[$alias_name]}"
+
+    if [ -n "$relative_path" ]; then
+        local target_dir="$PROJECTS_ROOT/$relative_path"
+        if [ -d "$target_dir" ]; then
+            cd "$target_dir" || return
+            echo "🔀 Changed to: $(pwd)"
+        else
+            echo "❌ Error: Directory $target_dir does not exist."
             return 1
-            ;;
-    esac
-    
-    if [ -d "$target_dir" ]; then
-        cd "$target_dir" || return
-        echo "🔀 Changed to: $(pwd)"
+        fi
     else
-        echo "❌ Error: Directory $target_dir does not exist."
+        echo "❌ Error: Unknown project alias '$alias_name'"
+        echo ""
+        _proj_usage
         return 1
     fi
 }
