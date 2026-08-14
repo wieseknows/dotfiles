@@ -52,6 +52,20 @@
     tcmt = !sh -c 'tortoisegitproc /command:commit'
     exp = !explorer .
     last = log -1 --decorate
-
+	
+	# Automatically bump patch version (e.g., v1.0.2 -> v1.0.3), create tag, and push to origin
+    bump = "!f(){ \
+        LATEST=$(git tag -l --sort=-v:refname | head -n 1); \
+        if [ -z \"$LATEST\" ]; then \
+            NEXT=\"v1.0.0\"; \
+        else \
+            PREFIX=$(echo \"$LATEST\" | grep -o '^[vV]'); \
+            RAW=$(echo \"$LATEST\" | sed 's/^[vV]//'); \
+            NEXT=\"${PREFIX}$(echo \"$RAW\" | awk -F. '{$NF = $NF + 1; print $1\".\"$2\".\"$NF}')\"; \
+        fi; \
+        echo \"[BUMP] ${LATEST:-no prior tag} -> $NEXT\"; \
+        git tag -a \"$NEXT\" -m \"Release $NEXT\" && \
+        git push origin \"$NEXT\"; \
+    }; f"
 [safe]
     directory = *

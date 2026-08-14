@@ -136,14 +136,15 @@ Never commit `.bashrc.local` or other credentials.
 
 Useful aliases include:
 
-| Command            | Description                               |
-| ------------------ | ----------------------------------------- |
-| `git get`          | Pull current branch and update submodules |
-| `git shr`          | Push current branch to `origin`           |
-| `git upd`          | Stash, pull, and re-apply changes         |
-| `git snap`         | Create a timestamped stash snapshot       |
-| `git cos <branch>` | Checkout branch and show status           |
-| `git history`      | Compact graphical Git history             |
+| Command            | Description                                                                |
+| ------------------ | -----------------------------------------                                  |
+| `git get`          | Pull current branch and update submodules                                  |
+| `git shr`          | Push current branch to `origin`                                            |
+| `git upd`          | Stash, pull, and re-apply changes                                          |
+| `git snap`         | Create a timestamped stash snapshot                                        |
+| `git cos <branch>` | Checkout branch and show status                                            |
+| `git history`      | Compact graphical Git history                                              |
+| `git bump`         | Auto-increment patch tag (e.g., `v1.0.2` → `v1.0.3`) and push to `origin`  |
 
 ## GitReview
 
