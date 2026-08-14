@@ -1,0 +1,61 @@
+# Git configuration - PUBLIC (shared on GitHub)
+# Personal settings are stored in ~/.gitconfig.local
+
+[include]
+    path = ~/.gitconfig.local
+
+[alias]
+    get = "!f(){ \
+        echo \"[GET] $(date '+%d-%m-%Y_%H-%M-%S')\"; \
+        git pull origin `git rev-parse --abbrev-ref HEAD` && \
+        git submodule update; \
+    }; f"
+    
+    shr = !git push origin `git rev-parse --abbrev-ref HEAD`
+    
+    brd = !git push origin --delete \"$1\"
+    
+    upd = "!f(){ git stash save && git pull origin `git rev-parse --abbrev-ref HEAD` && git stash pop; };f"
+    
+    cows = "!f(){ git stash save && git checkout \"$1\" && git pull origin `git rev-parse --abbrev-ref HEAD` && git stash pop; };f"
+    
+    snap = "!f(){ \
+        TS=$(date '+%d-%m-%Y_%H-%M-%S'); \
+        git stash push -m \"SNAPSHOT_$TS\" && \
+        git stash apply && \
+        git stash list; \
+    }; f"
+    
+    gas = "pull origin "
+    
+    sas = !"git push origin `git rev-parse --abbrev-ref HEAD`:$1"
+    
+    cos = "!f(){ git checkout \"$1\" && git status; };f"
+    
+    chistory = history
+    br = branch
+    ci = commit
+    cl = clean -d -x -f
+    co = checkout
+    chng = log -p -2
+    diff = log -U1 --word-diff
+    dump = cat-file -p
+    list = log --pretty=oneline
+    history = log --pretty=format:\"\t\t%h  %ad  | [%an]: %s%d\" --graph --date=short
+    rs = reset --hard
+    st = status
+    type = cat-file -t
+    undo = reset --soft HEAD~1
+    unstage = reset HEAD --
+    visual = !gitk
+    tlog = !sh -c 'tortoisegitproc /command:log'
+    tcmt = !sh -c 'tortoisegitproc /command:commit'
+    exp = !explorer .
+    last = log -1 --decorate
+    
+    review-local = "!f() { \
+        dotnet run --project \"$GIT_REVIEW/GitReview.csproj\" --no-launch-profile -- \"$@\"; \
+    }; f"
+
+[safe]
+    directory = *

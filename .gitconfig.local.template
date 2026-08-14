@@ -1,0 +1,16 @@
+# Local bash configuration - DO NOT COMMIT TO VERSION CONTROL
+# This file is for machine-specific settings, secrets, and personal overrides
+
+# API Keys
+export GEMINI_API_KEY="your_gemini_api_key_here"
+export DEEPSEEK_API_KEY="your_deepseek_api_key_here"
+
+# Project-specific environment variables
+# export PROJECTS_ROOT="/path/to/your/projects"
+
+# Machine-specific aliases
+# alias work='cd /mnt/c/work/projects'
+# alias home='cd /home/yourusername'
+
+# Custom PATH
+# export PATH="$HOME/bin:$PATH"

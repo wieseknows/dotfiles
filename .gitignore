@@ -1,0 +1,37 @@
+# Local machine configuration
+.bashrc.local
+.gitconfig.local
+
+# SSH keys and agent files
+*.pem
+*.key
+*.ppk
+id_*
+private_key*
+*.priv
+.ssh/
+agent_info
+agent_pid
+
+# Backup files
+*.bak
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
