@@ -58,6 +58,20 @@ elif [ -f "$DOTFILES_DIR/.bashrc.local.template" ]; then
     echo "⚠️  .bashrc.local not found in repo. Copied from template instead."
 fi
 
+# 5. Install / Update GitReview dotnet tool
+echo "🔍 Checking for .NET CLI & GitReview tool..."
+if command -v dotnet >/dev/null 2>&1; then
+    if dotnet tool list -g | grep -q "wieseknows.gitreview"; then
+        echo "🔄 Updating wieseknows.GitReview tool..."
+        dotnet tool update -g wieseknows.GitReview || echo "⚠️ Failed to update GitReview tool"
+    else
+        echo "📦 Installing wieseknows.GitReview tool..."
+        dotnet tool install -g wieseknows.GitReview || echo "⚠️ Failed to install GitReview tool"
+    fi
+else
+    echo "⚠️ .NET SDK (dotnet) not found in PATH. Skipping GitReview installation."
+fi
+
 echo ""
 echo "=================================================="
 echo "✅ Dotfiles installation complete!"

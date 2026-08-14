@@ -52,10 +52,6 @@
     tcmt = !sh -c 'tortoisegitproc /command:commit'
     exp = !explorer .
     last = log -1 --decorate
-    
-    review-local = "!f() { \
-        dotnet run --project \"$GIT_REVIEW/GitReview.csproj\" --no-launch-profile -- \"$@\"; \
-    }; f"
 
 [safe]
     directory = *

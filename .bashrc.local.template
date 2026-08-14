@@ -9,7 +9,6 @@ export DEEPSEEK_API_KEY="your_deepseek_api_key_here"
 export PROJECTS_ROOT="/c/dev/projects"
 
 # Custom GitReview tool settings
-export GIT_REVIEW="/c/dev/avi/local_projects/GitReview"
 export GIT_REVIEW_PROVIDER="gemini"
 
 # ==============================================================================
