@@ -1,44 +1,43 @@
-# Local configuration template (NOT tracked by Git)
-# Copy this file to ~/.bashrc.local or $DOTFILES_DIR/.bashrc.local and customize it.
-
-# API Keys
-export GEMINI_API_KEY="your_gemini_api_key_here"
-export DEEPSEEK_API_KEY="your_deepseek_api_key_here"
-export OPENROUTER_API_KEY="your_openrouter_api_key_here"
-
-# Custom LLM models
-# This model is free
-export OPENROUTER_MODEL="poolside/laguna-s-2.1:free"
-
-# Custom GitReview tool settings
-export GIT_REVIEW_PROVIDER="openrouter"
-
-# Custom project root path
-export PROJECTS_ROOT="/c/dev/projects"
-
 # ==============================================================================
-# SSH KEYS CONFIGURATION
-# Add paths to your private SSH keys below.
-# The SSH Agent will automatically load these keys when starting a session.
-# Examples:
-#   Windows path format:  "C:/dev/private_key" or "/c/dev/private_key"
-#   Linux / Home format:  "$HOME/.ssh/id_ed25519_personal"
+# LOCAL CONFIGURATION (NOT tracked by Git)
 # ==============================================================================
+# All personal / machine-specific settings are configured HERE in this one file.
+# Copy this file to ~/.bashrc.local and customize it with your settings.
+# Running ./install.sh will automatically apply everything to your system.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Git Identity (install.sh automatically syncs this to ~/.gitconfig.local)
+# ------------------------------------------------------------------------------
+export GIT_USER_NAME="Artem Ignatiev"
+export GIT_USER_EMAIL="artem.ignatiev@omegasoftware.de"
+
+# ------------------------------------------------------------------------------
+# 2. SSH Keys to load into ssh-agent upon terminal start
+# ------------------------------------------------------------------------------
+# Specify paths to private keys in OpenSSH format (NOT .ppk!).
+# Example: /c/dev/private_key or $HOME/.ssh/id_rsa
 SSH_KEYS=(
-    "C:/dev/private_key"
+    "/c/dev/private_key"
     "$HOME/.ssh/id_ed25519_personal"
+    "$HOME/.ssh/id_rsa"
 )
 
-# Machine-specific aliases
-# alias work='cd /c/work/projects'
+# ------------------------------------------------------------------------------
+# 3. API Keys & AI Providers
+# ------------------------------------------------------------------------------
+export OPENROUTER_API_KEY="your_openrouter_api_key_here"
+export OPENROUTER_MODEL="poolside/laguna-s-2.1:free"
+export GIT_REVIEW_PROVIDER="openrouter"
 
-# ==============================================================================
-# PROJECT NAVIGATION CONFIGURATION
-# ==============================================================================
-# Base directory for all your projects
+export GEMINI_API_KEY="your_gemini_api_key_here"
+export DEEPSEEK_API_KEY="your_deepseek_api_key_here"
+
+# ------------------------------------------------------------------------------
+# 4. Project Navigation (`proj <alias>` command)
+# ------------------------------------------------------------------------------
 export PROJECTS_ROOT="/c/dev/projects"
 
-# Declare associative array globally (-g)
 declare -g -A PROJECT_PATHS=(
     ["syn"]="synthesis_newdesign/web"
     ["syn_old"]="synthesis_old/web"

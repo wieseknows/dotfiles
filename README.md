@@ -1,201 +1,148 @@
 # Dotfiles
 
-Personal Bash and Git configuration for **Windows Git Bash / MINGW64** and **Linux**.
+Personal Bash and Git configuration for **Windows Git Bash (MINGW64)** and **Linux** with automated one-click setup.
 
-## Features
+---
 
-* **SSH Agent** — automatically starts/manages an SSH agent and loads configured keys.
-* **Project Navigation** — jump to projects with `proj <alias>`.
-* **Git Aliases** — shortcuts for common Git workflows.
-* **GitReview** — automatically installed/updated as a global .NET tool.
-* **Local Overrides** — machine-specific settings and secrets stay outside the shared configuration.
+## ⚡ Quick Start (One-Click Setup)
 
-## Structure
+All system customization is unified into **a single configuration file**.
 
-```text
-dotfiles/
-├── .bashrc
-├── .bashrc.local.template
-├── .gitconfig
-├── .gitconfig.local.template
-├── .gitignore
-├── aliases.bash
-├── functions.bash
-├── install.sh
-└── README.md
-```
-
-## Requirements
-
-### Linux
-
-* Bash
-* Git
-* OpenSSH
-* .NET SDK — optional, required for GitReview
-
-### Windows
-
-* Git for Windows / Git Bash
-* OpenSSH
-* .NET SDK — optional, required for GitReview
-
-## Installation
-
-Clone the repository:
+### Step 1. Clone the repository
 
 ```bash
 git clone https://github.com/wieseknows/dotfiles.git
 cd dotfiles
 ```
 
-Create local configuration files:
+### Step 2. Create and customize `.bashrc.local`
 
 ```bash
-cp .bashrc.local.template .bashrc.local
-cp .gitconfig.local.template .gitconfig.local
+cp .bashrc.local.template ~/.bashrc.local
 ```
+*(If you skip this step, `install.sh` will automatically create this file from the template on first run).*
 
-Edit them with your personal settings, then run:
-
-```bash
-./install.sh
-```
-
-Reload Bash:
+Open `~/.bashrc.local` in your favorite editor and set your details:
 
 ```bash
-source ~/.bashrc
-```
+# 1. Git Identity (install.sh automatically writes this to Git — no need to edit .gitconfig.local!)
+export GIT_USER_NAME="Your Name"
+export GIT_USER_EMAIL="your.email@example.com"
 
-The installer configures Bash and Git and, if `dotnet` is available, installs or updates the `wieseknows.GitReview` global tool.
-
-## Local Configuration
-
-Keep machine-specific settings in `.bashrc.local`.
-
-### SSH keys
-
-```bash
+# 2. Paths to private SSH keys (in OpenSSH format)
 SSH_KEYS=(
-    "C:/dev/private_key"
+    "/c/dev/private_key"
     "$HOME/.ssh/id_ed25519_personal"
+    "$HOME/.ssh/id_rsa"
 )
-```
 
-### Project navigation
-
-Set the root directory:
-
-```bash
+# 3. API Keys & AI tools
+export OPENROUTER_API_KEY="sk-..."
 export PROJECTS_ROOT="/c/dev/projects"
 ```
 
-Then define project aliases:
+### Step 3. Run the installer
+
+* **From terminal (Git Bash / Linux):**
+  ```bash
+  ./install.sh
+  ```
+* **Or in Windows Explorer:** simply double-click **`install.bat`**.
+
+> [!NOTE]
+> The console window **will not close automatically** after installation finishes — you can comfortably inspect all validation and setup logs before pressing Enter to exit.
+
+### Step 4. Reload Bash
 
 ```bash
-declare -g -A PROJECT_PATHS=(
-    ["syn"]="synthesis_newdesign/web"
-    ["oms"]="oms/web"
-    ["pin"]="pinergy/web"
-)
-```
-
-Paths are relative to `PROJECTS_ROOT`.
-
-Use:
-
-```bash
-proj syn
-proj oms
-proj pin
-```
-
-Run `proj` without arguments to see all configured projects.
-
-Adding a project only requires changing `.bashrc.local`:
-
-```bash
-["api"]="my-api/backend"
-```
-
-No changes to `functions.bash` are required.
-
-### API keys
-
-Secrets can also be stored in `.bashrc.local`:
-
-```bash
-export GEMINI_API_KEY="your_api_key_here"
-export DEEPSEEK_API_KEY="your_api_key_here"
-```
-
-Never commit `.bashrc.local` or other credentials.
-
-## Git
-
-Useful aliases include:
-
-| Command            | Description                                                                |
-| ------------------ | -----------------------------------------                                  |
-| `git get`          | Pull current branch and update submodules                                  |
-| `git shr`          | Push current branch to `origin`                                            |
-| `git upd`          | Stash, pull, and re-apply changes                                          |
-| `git snap`         | Create a timestamped stash snapshot                                        |
-| `git cos <branch>` | Checkout branch and show status                                            |
-| `git history`      | Compact graphical Git history                                              |
-| `git bump`         | Auto-increment patch tag (e.g., `v1.0.2` → `v1.0.3`) and push to `origin`  |
-
-## GitReview
-
-`install.sh` automatically checks for the .NET SDK and installs or updates:
-
-```text
-wieseknows.GitReview
-```
-
-If `.NET SDK` is not installed or not available in `PATH`, GitReview installation is skipped.
-
-The GitReview provider can be configured locally:
-
-```bash
-export GIT_REVIEW_PROVIDER="gemini"
-```
-
-## Security
-
-The following files are intended to remain local:
-
-```text
-.bashrc.local
-.gitconfig.local
-```
-
-Do not commit:
-
-* API keys
-* passwords
-* private SSH keys
-* machine-specific secrets
-
-If a credential is accidentally committed, revoke or rotate it immediately.
-
-## Updating
-
-Pull the latest changes:
-
-```bash
-cd /path/to/dotfiles
-git pull
-```
-
-Then re-run:
-
-```bash
-./install.sh
 source ~/.bashrc
 ```
+*(Or simply open a new terminal window / tab).*
 
-## License
+---
 
-MIT
+## 🔑 Managing SSH Keys
+
+### Important: OpenSSH vs PuTTY (`.ppk`)
+Git Bash and `ssh-add` **only accept OpenSSH format** private keys (`-----BEGIN OPENSSH PRIVATE KEY-----` or `-----BEGIN RSA PRIVATE KEY-----`). They **cannot** parse `.ppk` files.
+
+If you generate or maintain keys in **PuTTYgen**:
+1. Open **PuTTYgen** and click **Load**.
+2. Select your `.ppk` file (e.g., `C:\dev\private_key.ppk`).
+3. In the top menu, choose: **Conversions → Export OpenSSH key**.
+4. Save the file without the `.ppk` extension (e.g., `C:\dev\private_key`).
+
+> [!TIP]
+> The installer automatically validates all keys listed in `SSH_KEYS`. If a key is missing but a corresponding `.ppk` file is found on disk, the script will display a clear reminder on how to export it.
+
+### Azure DevOps (`ssh.dev.azure.com`)
+The installer automatically ensures the required host entry exists in `~/.ssh/config`:
+```ssh
+Host ssh.dev.azure.com vs-ssh.visualstudio.com
+    HostName ssh.dev.azure.com
+    IdentityFile /c/dev/private_key
+    IdentitiesOnly yes
+    PubkeyAcceptedKeyTypes +ssh-rsa
+```
+
+---
+
+## 🛠 Features & Commands
+
+### 1. Project Navigation (`proj`)
+Quickly jump to registered project directories from anywhere:
+* `proj` — display all configured project aliases and their paths.
+* `proj syn` — jump directly to the project (e.g., `/c/dev/projects/synthesis_newdesign/web`).
+
+Aliases and relative paths are configured in `~/.bashrc.local` via the `PROJECT_PATHS` associative array.
+
+### 2. Git Identity Check (`gitwho`)
+Inspect the effective Git name and email, along with their configuration sources:
+```bash
+gitwho
+```
+
+### 3. Useful Git Aliases
+
+| Command | Action |
+| :--- | :--- |
+| `git get` | Pull current branch and update submodules |
+| `git shr` | Push current branch to `origin` |
+| `git upd` | Safe pull: stashes working changes, pulls upstream, and pops stash |
+| `git snap` | Create an instant stash snapshot with a timestamp label |
+| `git cos <branch>` | Checkout a branch and immediately show `git status` |
+| `git bump` | Auto-increment patch version tag (e.g. `v1.0.2` → `v1.0.3`) and push tag to `origin` |
+| `git history` | Compact graphical commit history tree |
+
+### 4. Shell Shortcuts
+* `ll`, `la`, `l` — enhanced file listings.
+* `..`, `...`, `....` — quickly navigate 1, 2, or 3 folder levels up.
+* `dev` — jump straight to `/c/dev`.
+* `cls`, `c` — clear screen.
+
+### 5. GitReview Tool
+The installer detects .NET SDK and installs or updates the global CLI tool `wieseknows.gitreview`.
+
+---
+
+## 📁 Repository Structure
+
+```text
+dotfiles/
+├── .bashrc                  # Main shell environment loader and SSH Agent manager
+├── .bashrc.local.template   # UNIFIED local configuration template
+├── .gitconfig               # Shared public Git aliases and defaults
+├── .gitconfig.local.template# Fallback template for gitconfig (usually auto-generated)
+├── .gitignore               # Ensures local secrets and keys are never committed
+├── aliases.bash             # Daily shell aliases
+├── functions.bash           # Shell functions (proj, gitwho, mkcd, etc.)
+├── install.sh               # Smart installer (Bash)
+├── install.bat              # One-click launcher for Windows Explorer
+└── README.md                # Documentation
+```
+
+---
+
+## 🔒 Security
+
+Files named `.bashrc.local` and `.gitconfig.local` are listed in `.gitignore` and **are never tracked by Git**. Your secrets, API tokens, and private SSH key paths remain strictly local to your machine.

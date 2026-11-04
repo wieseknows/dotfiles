@@ -1,39 +1,52 @@
 # Main dotfiles configuration loader
 # This file is sourced from ~/.bashrc via install.sh
 
-# Source aliases
+# ====================================================
+# Aliases
+# ====================================================
+
 if [ -f "$DOTFILES_DIR/aliases.bash" ]; then
     source "$DOTFILES_DIR/aliases.bash"
 fi
 
-# Source functions
+# ====================================================
+# Functions
+# ====================================================
+
 if [ -f "$DOTFILES_DIR/functions.bash" ]; then
     source "$DOTFILES_DIR/functions.bash"
 fi
 
-# Default environment variables (can be overridden in ~/.bashrc.local)
+# ====================================================
+# Default environment
+# ====================================================
+
 export PROJECTS_ROOT="${PROJECTS_ROOT:-/c/dev/projects}"
 export HISTSIZE=10000
 export HISTFILESIZE=20000
 export HISTCONTROL=ignoreboth
 export EDITOR=vim
 
-# Source local settings FIRST (for secrets, machine-specific configs, and SSH_KEYS)
+# ====================================================
+# Local machine configuration
+# ====================================================
+
 if [ -f "$HOME/.bashrc.local" ]; then
     source "$HOME/.bashrc.local"
 fi
 
-# Load saved agent info if exists
-if [ -f ~/.ssh/agent_info ]; then
-    source ~/.ssh/agent_info
-fi
+# ====================================================
+# SSH Agent
+# ====================================================
 
-# Print summary of currently loaded SSH keys
+AGENT_INFO="$HOME/.ssh/agent_info"
+
 print_ssh_status() {
-    echo "🤖 SSH Agent (PID: $SSH_AGENT_PID)"
+    echo "🤖 SSH Agent (PID: ${SSH_AGENT_PID:-unknown})"
+
     local loaded_keys
     loaded_keys=$(ssh-add -l 2>/dev/null)
-    
+
     if [ $? -eq 0 ] && [ -n "$loaded_keys" ]; then
         echo "🔑 Loaded keys:"
         echo "$loaded_keys" | sed 's/^/   ✓ /'
@@ -42,63 +55,82 @@ print_ssh_status() {
     fi
 }
 
-# Add SSH keys defined in SSH_KEYS array or fall back to defaults
 add_ssh_keys() {
-    if ssh-add -l > /dev/null 2>&1; then
+    if [ -z "${SSH_KEYS+x}" ] || [ ${#SSH_KEYS[@]} -eq 0 ]; then
+        echo "  ⚠️ SSH_KEYS is not configured"
         return 0
     fi
-    
-    echo "🔑 Adding SSH keys..."
-    if [ -n "${SSH_KEYS+x}" ] && [ ${#SSH_KEYS[@]} -gt 0 ]; then
-        for key in "${SSH_KEYS[@]}"; do
-            if [ -f "$key" ]; then
-                ssh-add "$key" 2>/dev/null && echo "  ✓ Added $key" || echo "  ✗ Failed to add $key"
-            else
-                echo "  ⚠️ Key file not found: $key"
+
+    echo "🔑 Checking SSH keys..."
+
+    local loaded_fps
+    loaded_fps=$(ssh-add -l 2>/dev/null || true)
+
+    for key in "${SSH_KEYS[@]}"; do
+        if [ -f "$key" ]; then
+            # Warn if user provided a PuTTY .ppk file directly
+            if [[ "$key" == *.ppk ]]; then
+                echo "  ⚠️ PuTTY format unsupported: $key (export as OpenSSH key in PuTTYgen)"
+                continue
             fi
-        done
-    else
-        # Default key fallback if SSH_KEYS array is not set
-        if [ -f "$HOME/.ssh/id_ed25519" ]; then
-            ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null && echo "  ✓ Added id_ed25519"
+
+            # Check if key fingerprint is already loaded in agent
+            local key_fp
+            key_fp=$(ssh-keygen -lf "$key" 2>/dev/null | awk '{print $2}')
+            if [ -n "$key_fp" ] && echo "$loaded_fps" | grep -q "$key_fp"; then
+                echo "  ✓ Loaded: $key"
+            else
+                if ssh-add "$key" 2>/dev/null; then
+                    echo "  ✓ Added: $key"
+                else
+                    echo "  ✗ Failed: $key"
+                fi
+            fi
+        else
+            if [ -f "${key}.ppk" ]; then
+                echo "  ⚠️ Key not found: $key (Found ${key}.ppk in PuTTY format — convert to OpenSSH)"
+            else
+                echo "  ⚠️ Key not found: $key"
+            fi
         fi
-    fi
+    done
 }
 
-# SSH Agent setup - ensures only ONE agent process runs across terminal sessions
 start_ssh_agent() {
-    local is_new_agent=false
+    # 1. Load saved agent environment if available
+    if [ -f "$AGENT_INFO" ]; then
+        source "$AGENT_INFO" >/dev/null 2>&1
+    fi
 
-    # Check if existing agent PID is running
-    if [ -n "$SSH_AGENT_PID" ]; then
-        if kill -0 "$SSH_AGENT_PID" 2>/dev/null || ps -p "$SSH_AGENT_PID" > /dev/null 2>&1; then
+    # 2. Check if existing agent is alive and responding
+    if [ -n "$SSH_AGENT_PID" ] && kill -0 "$SSH_AGENT_PID" 2>/dev/null; then
+        ssh-add -l >/dev/null 2>&1
+        local ret=$?
+        # ret 0 = keys present, ret 1 = agent alive without keys
+        if [ $ret -eq 0 ] || [ $ret -eq 1 ]; then
+            add_ssh_keys
             print_ssh_status
             return 0
         fi
     fi
-    
-    # Check if socket exists and agent responds
-    if [ -S "$SSH_AUTH_SOCK" ] 2>/dev/null; then
-        if ssh-add -l > /dev/null 2>&1; then
-            print_ssh_status
-            return 0
-        fi
-        # Remove stale socket
-        rm -f "$SSH_AUTH_SOCK" 2>/dev/null
-    fi
-    
-    # Start a single new SSH agent instance
+
+    # 3. Start a new agent if none is running
     echo "🚀 Starting new SSH Agent..."
-    eval $(ssh-agent -s) > /dev/null
-    
-    # Persist agent environment variables for future shell instances
-    mkdir -p ~/.ssh
-    echo "export SSH_AUTH_SOCK=\"$SSH_AUTH_SOCK\"" > ~/.ssh/agent_info
-    echo "export SSH_AGENT_PID=\"$SSH_AGENT_PID\"" >> ~/.ssh/agent_info
-    
+    eval "$(ssh-agent -s)" >/dev/null
+
+    mkdir -p "$HOME/.ssh"
+    cat > "$AGENT_INFO" <<EOF
+export SSH_AUTH_SOCK="$SSH_AUTH_SOCK"
+export SSH_AGENT_PID="$SSH_AGENT_PID"
+EOF
+    chmod 600 "$AGENT_INFO" 2>/dev/null || true
+
     add_ssh_keys
     print_ssh_status
 }
 
-# Start or reconnect to existing agent
+# ====================================================
+# Start / reconnect SSH agent
+# ====================================================
+
 start_ssh_agent
