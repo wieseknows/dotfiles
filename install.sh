@@ -56,11 +56,14 @@ fi
 # ----------------------------------------------------
 # 2. Main Git configuration include
 # ----------------------------------------------------
-if git config --global --get-all include.path 2>/dev/null | grep -Fxq "$DOTFILES_DIR/.gitconfig"; then
+DOTFILES_GITCONFIG="$DOTFILES_DIR/.gitconfig"
+DOTFILES_GITCONFIG_WIN="$(cd "$DOTFILES_DIR" && pwd -W 2>/dev/null || true)/.gitconfig"
+
+if git config --global --get-all include.path 2>/dev/null | grep -F -e "$DOTFILES_GITCONFIG" -e "$DOTFILES_GITCONFIG_WIN" -q; then
     echo "ℹ️  Git global include already configured: $DOTFILES_DIR/.gitconfig"
 else
     echo "🔧 Configuring Git global include..."
-    git config --global include.path "$DOTFILES_DIR/.gitconfig"
+    git config --global --add include.path "$DOTFILES_DIR/.gitconfig"
     echo "✅ Git configured to include $DOTFILES_DIR/.gitconfig"
 fi
 
