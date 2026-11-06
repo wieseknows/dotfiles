@@ -47,6 +47,7 @@ export PROJECTS_ROOT="/c/dev/projects"
   ```bash
   ./install.sh
   ```
+  *(For automated / headless installation, set `NONINTERACTIVE=1 ./install.sh` or `CI=1 ./install.sh`).*
 * **Or in Windows Explorer:** simply double-click **`install.bat`**.
 
 > [!NOTE]
@@ -76,14 +77,15 @@ If you generate or maintain keys in **PuTTYgen**:
 > The installer automatically validates all keys listed in `SSH_KEYS`. If a key is missing but a corresponding `.ppk` file is found on disk, the script will display a clear reminder on how to export it.
 
 ### Azure DevOps (`ssh.dev.azure.com`)
-The installer automatically ensures the required host entry exists in `~/.ssh/config`:
+If you define `AZURE_SSH_KEY` in `~/.bashrc.local`, the installer automatically ensures the required host entry exists in `~/.ssh/config`:
 ```ssh
 Host ssh.dev.azure.com vs-ssh.visualstudio.com
     HostName ssh.dev.azure.com
-    IdentityFile /c/dev/private_key
+    IdentityFile <path_to_your_azure_ssh_key>
     IdentitiesOnly yes
     PubkeyAcceptedKeyTypes +ssh-rsa
 ```
+Otherwise, you can add this block to `~/.ssh/config` manually if connecting to Azure DevOps.
 
 ---
 
@@ -108,19 +110,28 @@ gitwho
 | :--- | :--- |
 | `git get` | Pull current branch and update submodules |
 | `git shr` | Push current branch to `origin` |
-| `git upd` | Safe pull: stashes working changes, pulls upstream, and pops stash |
-| `git snap` | Create an instant stash snapshot with a timestamp label |
+| `git brd <branch>` | Delete remote branch (`push origin --delete`) without argument duplication |
+| `git gas [branch]` | Pull from origin |
+| `git cows <branch>` | Safe switch: stashes changes, checkouts target branch, pulls, and reapplies stash |
+| `git upd` | Safe pull: stashes working changes, pulls upstream, and pops stash (preserves unrelated stashes) |
+| `git snap` | Create an instant stash snapshot with a timestamp label (guards clean tree) |
 | `git cos <branch>` | Checkout a branch and immediately show `git status` |
+| `git cl` | Safe clean: cleans untracked files (`clean -d -f`) without removing gitignored `.local` configs |
 | `git bump` | Auto-increment patch version tag (e.g. `v1.0.2` → `v1.0.3`) and push tag to `origin` |
 | `git history` | Compact graphical commit history tree |
 
 ### 4. Shell Shortcuts
 * `ll`, `la`, `l` — enhanced file listings.
 * `..`, `...`, `....` — quickly navigate 1, 2, or 3 folder levels up.
-* `dev` — jump straight to `/c/dev`.
+* `dev` — cross-platform jump to development directory (`$DEV_DIR`, `/c/dev`, `/mnt/c/dev`, or `~/dev`).
 * `cls`, `c` — clear screen.
 
-### 5. GitReview Tool
+### 5. File & Directory Search & Helpers
+* `findf <pattern> [path]` — Case-insensitive file search safe with dashes, spaces, and glob patterns.
+* `findd <pattern> [path]` — Case-insensitive directory search safe with dashes, spaces, and glob patterns.
+* `mkcd <dir>` — Create directory and immediately change into it.
+
+### 6. GitReview Tool
 The installer detects .NET SDK and installs or updates the global CLI tool `wieseknows.gitreview`.
 
 ---
@@ -131,12 +142,13 @@ The installer detects .NET SDK and installs or updates the global CLI tool `wies
 dotfiles/
 ├── .bashrc                  # Main shell environment loader and SSH Agent manager
 ├── .bashrc.local.template   # UNIFIED local configuration template
+├── .gitattributes           # Git repository configuration enforcing LF line endings
 ├── .gitconfig               # Shared public Git aliases and defaults
-├── .gitconfig.local.template# Fallback template for gitconfig (usually auto-generated)
+├── .gitconfig.local.template# Git INI template for local overrides (~/.gitconfig.local)
 ├── .gitignore               # Ensures local secrets and keys are never committed
-├── aliases.bash             # Daily shell aliases
-├── functions.bash           # Shell functions (proj, gitwho, mkcd, etc.)
-├── install.sh               # Smart installer (Bash)
+├── aliases.bash             # Daily shell aliases and shortcuts
+├── functions.bash           # Shell functions (proj, gitwho, mkcd, findf, findd)
+├── install.sh               # Smart idempotent installer (Bash)
 ├── install.bat              # One-click launcher for Windows Explorer
 └── README.md                # Documentation
 ```

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Main dotfiles configuration loader
 # This file is sourced from ~/.bashrc via install.sh
 
@@ -32,6 +33,7 @@ export EDITOR=vim
 # ====================================================
 
 if [ -f "$HOME/.bashrc.local" ]; then
+    # shellcheck source=/dev/null
     source "$HOME/.bashrc.local"
 fi
 
@@ -45,10 +47,9 @@ print_ssh_status() {
     echo "🤖 SSH Agent (PID: ${SSH_AGENT_PID:-unknown})"
 
     local loaded_keys
-    loaded_keys=$(ssh-add -l 2>/dev/null)
-
-    if [ $? -eq 0 ] && [ -n "$loaded_keys" ]; then
+    if loaded_keys=$(ssh-add -l 2>/dev/null) && [ -n "$loaded_keys" ]; then
         echo "🔑 Loaded keys:"
+        # shellcheck disable=SC2001
         echo "$loaded_keys" | sed 's/^/   ✓ /'
     else
         echo "🔑 No SSH keys loaded"
@@ -99,6 +100,7 @@ add_ssh_keys() {
 start_ssh_agent() {
     # 1. Load saved agent environment if available
     if [ -f "$AGENT_INFO" ]; then
+        # shellcheck source=/dev/null
         source "$AGENT_INFO" >/dev/null 2>&1
     fi
 
