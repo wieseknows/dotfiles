@@ -175,11 +175,7 @@ function Read-ExistingConfig {
 function Write-BashrcLocalFile {
     param([hashtable]$Config)
 
-    if (Test-Path $BashrcLocalPath) {
-        $ts = Get-Date -Format "yyyyMMdd_HHmmss"
-        $backupPath = "$BashrcLocalPath.bak.$ts"
-        Copy-Item -Path $BashrcLocalPath -Destination $backupPath -Force
-    }
+    # Content is compared below before creating a backup or overwriting
 
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.Append("# ==============================================================================`n")
@@ -230,7 +226,17 @@ function Write-BashrcLocalFile {
 
     # Write UTF-8 without BOM and LF line endings for Git Bash compatibility
     $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($BashrcLocalPath, $sb.ToString(), $utf8NoBom)
+    $newContent = $sb.ToString()
+    if (Test-Path $BashrcLocalPath) {
+        $existing = ([System.IO.File]::ReadAllText($BashrcLocalPath, $utf8NoBom)) -replace "`r`n", "`n"
+        if ($existing -eq $newContent) {
+            return $false
+        }
+        $ts = Get-Date -Format "yyyyMMdd_HHmmss"
+        Copy-Item -Path $BashrcLocalPath -Destination "$BashrcLocalPath.bak.$ts" -Force
+    }
+    [System.IO.File]::WriteAllText($BashrcLocalPath, $newContent, $utf8NoBom)
+    return $true
 }
 
 function Show-OpenFileDialog {
@@ -351,7 +357,7 @@ function Show-FolderDialog {
                             </StackPanel>
                         </Grid>
 
-                        <TextBlock Text="SSH Keys (optional — OpenSSH keys in ~/.ssh are auto-loaded if empty)" FontSize="15" FontWeight="SemiBold" Foreground="#89B4FA" Margin="0,4,0,8"/>
+                        <TextBlock Text="SSH Keys (optional ï¿½ OpenSSH keys in ~/.ssh are auto-loaded if empty)" FontSize="15" FontWeight="SemiBold" Foreground="#89B4FA" Margin="0,4,0,8"/>
                         <ListBox x:Name="LstSshKeys" Height="130" Background="#1E1E2E" Foreground="#CDD6F4" BorderBrush="#45475A" Margin="0,0,0,8"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <Button x:Name="BtnAddSshKey" Content="Browse &amp; Add Key..." Margin="0,0,8,0"/>
@@ -726,18 +732,21 @@ $btnInstall.Add_Click({
             ProjectPaths      = $projectsCollection
         }
 
-        Write-BashrcLocalFile -Config $cfgToWrite
-        $txtLog.AppendText("Saved ~/.bashrc.local successfully.`r`n")
+        $wroteLocal = Write-BashrcLocalFile -Config $cfgToWrite
+        if ($wroteLocal) {
+            $txtLog.AppendText("Saved ~/.bashrc.local successfully.`r`n")
+        } else {
+            $txtLog.AppendText("~/.bashrc.local is unchanged.`r`n")
+        }
         $txtLog.AppendText("Running install.sh via $gitBash ...`r`n`r`n")
 
         $installSh = (Join-Path $DotfilesDir "install.sh") -replace '\\', '/'
-        $env:NONINTERACTIVE = "1"
-        $env:FORCE_SYNC_GIT_IDENTITY = "1"
-        $env:INSTALL_GITREVIEW = if ($chkInstallGitReview.IsChecked) { "1" } else { "0" }
 
         $psi = [System.Diagnostics.ProcessStartInfo]::new()
         $psi.FileName = $gitBash
         $psi.Arguments = "`"$installSh`""
+        $psi.EnvironmentVariables["NONINTERACTIVE"] = "1"
+        $psi.EnvironmentVariables["INSTALL_GITREVIEW"] = if ($chkInstallGitReview.IsChecked) { "1" } else { "0" }
         $psi.UseShellExecute = $false
         $psi.RedirectStandardOutput = $true
         $psi.RedirectStandardError = $true

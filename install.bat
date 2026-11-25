@@ -38,4 +38,5 @@ if not defined GIT_BASH (
     exit /b 1
 )
 
+set "PAUSE_ON_EXIT=1"
 "!GIT_BASH!" "%~dp0install.sh"
