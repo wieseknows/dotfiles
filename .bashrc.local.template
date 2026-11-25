@@ -1,0 +1,37 @@
+# ==============================================================================
+# LOCAL CONFIGURATION TEMPLATE
+# Copy or let install.sh generate ~/.bashrc.local from these settings.
+# Never commit ~/.bashrc.local or any secrets to Git.
+# ==============================================================================
+
+# 1. Git Identity
+export GIT_USER_NAME=""
+export GIT_USER_EMAIL=""
+
+# 2. SSH Keys (leave empty to auto-discover OpenSSH keys in ~/.ssh)
+SSH_KEYS=(
+    # "$HOME/.ssh/id_ed25519"
+)
+# export AZURE_SSH_KEY="$HOME/.ssh/azure_rsa"
+
+# 3. API Keys & AI Providers (GitReview)
+export GIT_REVIEW_PROVIDER="openrouter"
+export OPENROUTER_MODEL="poolside/laguna-s-2.1:free"
+# export OPENROUTER_API_KEY=""
+# export GEMINI_API_KEY=""
+# export DEEPSEEK_API_KEY=""
+
+# 4. Project Navigation (`proj <alias>`)
+export PROJECTS_ROOT="/c/dev/projects"
+declare -g -A PROJECT_PATHS=(
+    # ["app"]="/c/dev/projects/my-app/web"
+)
+
+# 5. Antigravity Agent Configuration (wieseknows/my-agent-config)
+export INSTALL_AGENT_CONFIG=false
+export AGENT_CONFIG_REPO="https://github.com/wieseknows/my-agent-config.git"
+export AGENT_CONFIG_DIR="$HOME/.local/share/my-agent-config"
+# Project aliases from PROJECT_PATHS to receive .agents/rules and .agents/workflows
+AGENT_CONFIG_PROJECTS=(
+    # "app"
+)
