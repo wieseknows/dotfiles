@@ -41,5 +41,11 @@ if not defined GIT_BASH (
     exit /b 1
 )
 
-set "PAUSE_ON_EXIT=1"
-"!GIT_BASH!" "%~dp0install.sh" %1 %2 %3 %4 %5
+"!GIT_BASH!" "%~dp0install.sh" %1 %2 %3 %4 %5 %6 %7 %8 %9
+set "EXIT_CODE=%ERRORLEVEL%"
+echo.
+if not "%EXIT_CODE%"=="0" (
+    echo [ERROR] Installer exited with code %EXIT_CODE%.
+)
+pause
+exit /b %EXIT_CODE%
