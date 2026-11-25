@@ -1,12 +1,12 @@
 # Dotfiles
 
-Personal Bash and Git configuration for **Windows Git Bash (MINGW64)** and **Linux** with automated one-click setup.
+Personal Bash and Git configuration for **Windows Git Bash (MINGW64)** and **Linux** with automated one-click setup, including optional Antigravity agent config orchestration.
 
 ---
 
 ## ⚡ Quick Start (One-Click Setup)
 
-You don't need to copy or edit any `.template` or `.local` files manually. Both the GUI wizard and the CLI installer prompt you for your settings during setup and generate your machine-local configs in `$HOME` (`~/.bashrc.local` and `~/.gitconfig.local`) automatically.
+You don't need to copy or edit `.bashrc.local` manually. Both the GUI wizard and the CLI installer prompt you for your settings during setup and generate your machine-local configs in `$HOME` (`~/.bashrc.local` and `~/.gitconfig.local`) automatically. A reference template is also provided in `.bashrc.local.template`.
 
 ### Step 1. Clone the repository
 
@@ -26,9 +26,10 @@ cd dotfiles
   ```bash
   ./install.sh
   ```
-  The installer will interactively ask for your Git identity, SSH keys, and optional AI/GitReview API keys on first run.
+  The installer will interactively ask for your Git identity, SSH keys, optional AI/GitReview API keys, and whether to sync Antigravity agent config on first run.
   * To re-run the interactive configuration later, use `./install.sh --reconfigure`.
   * For automated / headless installation, set `NONINTERACTIVE=1 ./install.sh` or `CI=1 ./install.sh` (optionally passing `GIT_USER_NAME`, `GIT_USER_EMAIL`, etc. via environment variables).
+  * Useful flags: `--skip-agents`, `--only-agents`, `--dry-run`, `--help`.
 
 ### Step 3. Reload Bash
 
@@ -36,6 +37,20 @@ cd dotfiles
 source ~/.bashrc
 ```
 *(Or simply open a new terminal window / tab).*
+
+---
+
+## 🤖 Antigravity Agent Config (`my-agent-config`)
+
+`dotfiles` acts as the orchestrator for [wieseknows/my-agent-config](https://github.com/wieseknows/my-agent-config) without using Git submodules.
+
+In `~/.bashrc.local` (see `.bashrc.local.template`):
+* `INSTALL_AGENT_CONFIG=true|false` — enable/disable agent config sync.
+* `AGENT_CONFIG_REPO` — repository URL (default: `https://github.com/wieseknows/my-agent-config.git`).
+* `AGENT_CONFIG_DIR` — local clone path (default: `$HOME/.local/share/my-agent-config`).
+* `AGENT_CONFIG_PROJECTS` — array of aliases from `PROJECT_PATHS` where `.agents/rules/` and `.agents/workflows/` should be installed. Leave empty for global-only (`~/.gemini/`).
+
+When enabled, `./install.sh` performs a shallow clone or `git pull --ff-only`, then invokes `my-agent-config/install.sh --global` and `--project <path>` for each selected alias. If the network or agent step fails, `dotfiles` logs a warning, continues the rest of the setup, and reports the issue in the final summary.
 
 ---
 
@@ -90,6 +105,7 @@ gitwho
 | `git shr` | Push current branch to `origin` |
 | `git brd <branch>` | Delete remote branch (`push origin --delete`) without argument duplication |
 | `git gas [branch]` | Pull from origin |
+| `git sas <branch>` | Push current branch to a specific remote branch name |
 | `git cows <branch>` | Safe switch: stashes changes, checkouts target branch, pulls, and reapplies stash |
 | `git upd` | Safe pull: stashes working changes, pulls upstream, and pops stash (preserves unrelated stashes) |
 | `git snap` | Create an instant stash snapshot with a timestamp label (guards clean tree) |
@@ -114,22 +130,33 @@ The installer detects .NET SDK and installs or updates the global CLI tool `wies
 
 ---
 
+## 🔧 Troubleshooting
+
+* **Windows symlinks:** Git Bash symlinks require Developer Mode or elevated privileges and can fail silently. Both `dotfiles` and `my-agent-config` copy files instead of symlinking and compare content hashes to stay idempotent.
+* **PowerShell execution policy:** If PowerShell scripts are blocked, launch via `install.bat` (which uses `-ExecutionPolicy Bypass`) or run `./install.sh` directly in Git Bash.
+* **Shared `~/.gemini/` with Gemini CLI:** Global agent rules installed to `~/.gemini/GEMINI.md` are shared with Gemini CLI. Existing differing files are backed up with a timestamp before overwriting.
+
+---
+
 ## 📁 Repository Structure
 
 ```text
 dotfiles/
 ├── assets/
-│   └── setup-wizard.png   # GUI Setup Wizard screenshot
-├── .bashrc                  # Main shell environment loader and SSH Agent manager
-├── .gitattributes           # Git repository configuration enforcing LF line endings
-├── .gitconfig               # Shared public Git aliases and defaults
-├── .gitignore               # Ensures local secrets and keys are never committed
-├── aliases.bash             # Daily shell aliases and shortcuts
-├── functions.bash           # Shell functions (proj, gitwho, mkcd, findf, findd)
-├── install.sh               # Smart idempotent installer with interactive CLI setup
-├── install-gui.ps1          # Windows WPF GUI Setup Wizard
-├── install.bat              # One-click launcher for Windows Explorer (GUI / --cli)
-└── README.md                # Documentation
+│   └── setup-wizard.png      # GUI Setup Wizard screenshot
+├── tests/
+│   └── smoke_test.sh         # Isolated HOME smoke tests for install.sh
+├── .bashrc                   # Main shell environment loader and SSH Agent manager
+├── .bashrc.local.template    # Reference template for ~/.bashrc.local
+├── .gitattributes            # Git repository configuration enforcing LF line endings
+├── .gitconfig                # Shared public Git aliases and defaults
+├── .gitignore                # Ensures local secrets and keys are never committed
+├── aliases.bash              # Daily shell aliases and shortcuts
+├── functions.bash            # Shell functions (proj, gitwho, mkcd, findf, findd)
+├── install.sh                # Smart idempotent installer with interactive CLI setup
+├── install-gui.ps1           # Windows WPF GUI Setup Wizard
+├── install.bat               # One-click launcher for Windows Explorer (GUI / --cli)
+└── README.md                 # Documentation
 ```
 
 ---
