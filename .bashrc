@@ -56,9 +56,37 @@ print_ssh_status() {
     fi
 }
 
+discover_ssh_keys() {
+    local ssh_dir="$HOME/.ssh"
+    [ -d "$ssh_dir" ] || return 0
+
+    local candidate
+    for candidate in "$ssh_dir"/*; do
+        [ -f "$candidate" ] || continue
+        case "$candidate" in
+            *.pub|*.ppk|*.bak|*.bak.*|*/config|*/known_hosts*|*/authorized_keys*|*/agent_info*)
+                continue
+                ;;
+        esac
+        if grep -qsE '^-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----' "$candidate"; then
+            printf '%s\n' "$candidate"
+        fi
+    done
+}
+
 add_ssh_keys() {
-    if [ -z "${SSH_KEYS+x}" ] || [ ${#SSH_KEYS[@]} -eq 0 ]; then
-        echo "  ⚠️ SSH_KEYS is not configured"
+    local keys_to_load=()
+    if [ -n "${SSH_KEYS+x}" ] && [ ${#SSH_KEYS[@]} -gt 0 ]; then
+        keys_to_load=("${SSH_KEYS[@]}")
+    else
+        local discovered_key
+        while IFS= read -r discovered_key; do
+            [ -n "$discovered_key" ] && keys_to_load+=("$discovered_key")
+        done < <(discover_ssh_keys)
+    fi
+
+    if [ ${#keys_to_load[@]} -eq 0 ]; then
+        echo "  ℹ️  No SSH keys configured or found in ~/.ssh"
         return 0
     fi
 
@@ -67,7 +95,7 @@ add_ssh_keys() {
     local loaded_fps
     loaded_fps=$(ssh-add -l 2>/dev/null || true)
 
-    for key in "${SSH_KEYS[@]}"; do
+    for key in "${keys_to_load[@]}"; do
         if [ -f "$key" ]; then
             # Warn if user provided a PuTTY .ppk file directly
             if [[ "$key" == *.ppk ]]; then

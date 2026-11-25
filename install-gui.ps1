@@ -351,7 +351,7 @@ function Show-FolderDialog {
                             </StackPanel>
                         </Grid>
 
-                        <TextBlock Text="SSH Keys (OpenSSH format, loaded into ssh-agent)" FontSize="15" FontWeight="SemiBold" Foreground="#89B4FA" Margin="0,4,0,8"/>
+                        <TextBlock Text="SSH Keys (optional — OpenSSH keys in ~/.ssh are auto-loaded if empty)" FontSize="15" FontWeight="SemiBold" Foreground="#89B4FA" Margin="0,4,0,8"/>
                         <ListBox x:Name="LstSshKeys" Height="130" Background="#1E1E2E" Foreground="#CDD6F4" BorderBrush="#45475A" Margin="0,0,0,8"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <Button x:Name="BtnAddSshKey" Content="Browse &amp; Add Key..." Margin="0,0,8,0"/>

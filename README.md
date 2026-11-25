@@ -49,7 +49,8 @@ If you generate or maintain keys in **PuTTYgen**:
 4. Save the file without the `.ppk` extension (e.g., `C:\dev\private_key`).
 
 > [!TIP]
-> The installer automatically validates all keys listed in `SSH_KEYS`. If a key is missing but a corresponding `.ppk` file is found on disk, the script will display a clear reminder on how to export it.
+> `SSH_KEYS` is optional. If you leave it empty in the installer, `.bashrc` automatically discovers and loads OpenSSH private keys from `~/.ssh/`.
+> The installer also validates any keys explicitly listed in `SSH_KEYS`. If a key is missing but a corresponding `.ppk` file is found on disk, the script will display a clear reminder on how to export it.
 
 ### Azure DevOps (`ssh.dev.azure.com`)
 If you define `AZURE_SSH_KEY` in `~/.bashrc.local`, the installer automatically ensures the required host entry exists in `~/.ssh/config`:

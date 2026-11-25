@@ -389,7 +389,7 @@ validate_ssh_keys() {
             fi
         done
     else
-        echo "  ℹ️  No SSH_KEYS defined in ~/.bashrc.local"
+        echo "  ℹ️  No SSH_KEYS defined; ~/.bashrc will auto-detect OpenSSH keys in ~/.ssh"
     fi
 }
 
