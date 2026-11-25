@@ -8,6 +8,15 @@ RECONFIGURE=0
 SKIP_AGENTS=0
 ONLY_AGENTS=0
 DRY_RUN=0
+CLI_AGENTS=0
+CLI_AGENT_REPO=""
+CLI_AGENT_DIR=""
+CLI_AGENT_PROJECTS=()
+CLI_AGENT_PROJECTS_SET=0
+
+INSTALL_CONF="$HOME/.config/dotfiles/install.conf"
+DEFAULT_AGENT_REPO="https://github.com/wieseknows/my-agent-config.git"
+DEFAULT_AGENT_DIR="~/.local/share/my-agent-config"
 
 SUMMARY_INSTALLED=()
 SUMMARY_UPDATED=()
@@ -15,22 +24,71 @@ SUMMARY_SKIPPED=()
 SUMMARY_BACKED_UP=()
 SUMMARY_WARNINGS=()
 
-for arg in "$@"; do
-    case "$arg" in
-        --reconfigure|-r) RECONFIGURE=1 ;;
-        --skip-agents)    SKIP_AGENTS=1 ;;
-        --only-agents)    ONLY_AGENTS=1 ;;
-        --dry-run)        DRY_RUN=1 ;;
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --reconfigure|-r)
+            RECONFIGURE=1
+            shift
+            ;;
+        --agents)
+            CLI_AGENTS=1
+            shift
+            ;;
+        --agent-project)
+            if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
+                echo "[ERROR] --agent-project requires a path argument" >&2
+                exit 1
+            fi
+            CLI_AGENT_PROJECTS+=("$2")
+            CLI_AGENT_PROJECTS_SET=1
+            shift 2
+            ;;
+        --agent-repo)
+            if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
+                echo "[ERROR] --agent-repo requires a URL argument" >&2
+                exit 1
+            fi
+            CLI_AGENT_REPO="$2"
+            shift 2
+            ;;
+        --agent-dir)
+            if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
+                echo "[ERROR] --agent-dir requires a path argument" >&2
+                exit 1
+            fi
+            CLI_AGENT_DIR="$2"
+            shift 2
+            ;;
+        --skip-agents)
+            SKIP_AGENTS=1
+            shift
+            ;;
+        --only-agents)
+            ONLY_AGENTS=1
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
         --help|-h)
             cat << 'EOF'
 Usage: ./install.sh [OPTIONS]
 
 Options:
-  -r, --reconfigure   Interactively reconfigure ~/.bashrc.local (preserves existing values as defaults)
-  --skip-agents       Skip Antigravity agent config installation/sync
-  --only-agents       Only install/sync Antigravity agent config (skip shell/git/ssh steps)
-  --dry-run           Show planned actions without modifying files (forwarded to my-agent-config)
-  -h, --help          Show this help message
+  -r, --reconfigure       Interactively reconfigure ~/.bashrc.local (preserves existing values as defaults)
+  --agents                Enable Antigravity agent config installation/sync (persisted in install.conf)
+  --agent-project <path>  Absolute path to project for .agents/ rules (repeatable, persisted in install.conf)
+  --agent-repo <url>      Override my-agent-config repository URL (persisted in install.conf)
+  --agent-dir <path>      Override my-agent-config local clone directory (persisted in install.conf)
+  --skip-agents           Skip Antigravity agent config installation/sync for this run
+  --only-agents           Only install/sync Antigravity agent config (skip shell/git/ssh steps)
+  --dry-run               Show planned actions without modifying files (forwarded to my-agent-config)
+  -h, --help              Show this help message
+
+Configuration:
+  Shell runtime settings: ~/.bashrc.local
+  Installer preferences:  ~/.config/dotfiles/install.conf (git-config format)
 
 Environment variables:
   NONINTERACTIVE=1    Skip interactive prompts (uses existing/env defaults)
@@ -41,7 +99,7 @@ EOF
             exit 0
             ;;
         *)
-            echo "[ERROR] Unknown option: $arg" >&2
+            echo "[ERROR] Unknown option: $1" >&2
             exit 1
             ;;
     esac
@@ -170,9 +228,6 @@ generate_bashrc_local() {
     local gemini_key="${GEMINI_API_KEY:-}"
     local deepseek_key="${DEEPSEEK_API_KEY:-}"
     local projects_root="${PROJECTS_ROOT:-/c/dev/projects}"
-    local install_agents="${INSTALL_AGENT_CONFIG:-false}"
-    local agent_repo="${AGENT_CONFIG_REPO:-https://github.com/wieseknows/my-agent-config.git}"
-    local agent_dir="${AGENT_CONFIG_DIR:-$HOME/.local/share/my-agent-config}"
 
     local ssh_keys=() detected_key
     if [ -n "${SSH_KEYS+x}" ] && [ ${#SSH_KEYS[@]} -gt 0 ]; then
@@ -181,11 +236,6 @@ generate_bashrc_local() {
         while IFS= read -r detected_key; do
             [ -n "$detected_key" ] && ssh_keys+=("$detected_key")
         done < <(detect_default_ssh_keys)
-    fi
-
-    local agent_projects=()
-    if [ -n "${AGENT_CONFIG_PROJECTS+x}" ] && [ ${#AGENT_CONFIG_PROJECTS[@]} -gt 0 ]; then
-        agent_projects=("${AGENT_CONFIG_PROJECTS[@]}")
     fi
 
     if is_interactive; then
@@ -220,14 +270,6 @@ generate_bashrc_local() {
             openrouter_key="$(prompt_secret "OpenRouter API Key" "$openrouter_key")"
             gemini_key="$(prompt_secret "Gemini API Key" "$gemini_key")"
             deepseek_key="$(prompt_secret "DeepSeek API Key" "$deepseek_key")"
-        fi
-
-        local configure_agents=""
-        read -rp "Enable Antigravity agent config sync (my-agent-config)? [y/N]: " configure_agents
-        if [[ "$configure_agents" =~ ^[Yy]$ ]]; then
-            install_agents="true"
-        elif [ -n "$configure_agents" ]; then
-            install_agents="false"
         fi
     fi
 
@@ -269,16 +311,6 @@ generate_bashrc_local() {
             echo "    # [\"app\"]=\"/c/dev/projects/my-app/web\""
         fi
         echo ")"
-        echo ""
-        echo "# 5. Antigravity Agent Configuration (wieseknows/my-agent-config)"
-        echo "export INSTALL_AGENT_CONFIG=$install_agents"
-        echo "export AGENT_CONFIG_REPO=\"$(escape_bash_dq "$agent_repo")\""
-        echo "export AGENT_CONFIG_DIR=\"$(escape_bash_dq "$agent_dir")\""
-        echo "AGENT_CONFIG_PROJECTS=("
-        for ap in ${agent_projects[@]+"${agent_projects[@]}"}; do
-            [ -n "$ap" ] && echo "    \"$(escape_bash_dq "$ap")\""
-        done
-        echo ")"
     } > "$tmp_local"
 
     local existed=0
@@ -309,21 +341,134 @@ resolve_project_path() {
     fi
 }
 
+expand_tilde() {
+    local p="$1"
+    case "$p" in
+        "~") printf '%s\n' "$HOME" ;;
+        "~/"*) printf '%s\n' "$HOME/${p#~/}" ;;
+        *) printf '%s\n' "$p" ;;
+    esac
+}
+
+conf_has_agents_section() {
+    [ -f "$INSTALL_CONF" ] && git config --file "$INSTALL_CONF" --get-regexp '^agents\.' >/dev/null 2>&1
+}
+
+write_agents_conf() {
+    local enabled="$1" repo="$2" dir="$3"
+    shift 3
+    local projects=("$@")
+
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "ℹ️  [dry-run] Would update $INSTALL_CONF"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$INSTALL_CONF")"
+    git config --file "$INSTALL_CONF" agents.enabled "$enabled"
+    git config --file "$INSTALL_CONF" agents.repo "$repo"
+    git config --file "$INSTALL_CONF" agents.dir "$dir"
+    git config --file "$INSTALL_CONF" --unset-all agents.project 2>/dev/null || true
+    local proj
+    for proj in ${projects[@]+"${projects[@]}"}; do
+        [ -n "$proj" ] && git config --file "$INSTALL_CONF" --add agents.project "$proj"
+    done
+}
+
+# One-time migration from legacy ~/.bashrc.local agent variables into install.conf.
+# Leaves ~/.bashrc.local untouched so no lines are deleted without an explicit backup.
+migrate_legacy_agent_config() {
+    conf_has_agents_section && return 0
+    [ -f "$HOME/.bashrc.local" ] || return 0
+    grep -qE '^(export[[:space:]]+)?(INSTALL_AGENT_CONFIG|AGENT_CONFIG_)' "$HOME/.bashrc.local" || return 0
+
+    local mig_enabled="${INSTALL_AGENT_CONFIG:-false}"
+    local mig_repo="${AGENT_CONFIG_REPO:-$DEFAULT_AGENT_REPO}"
+    local mig_dir="${AGENT_CONFIG_DIR:-$DEFAULT_AGENT_DIR}"
+    local mig_projects=()
+    local alias_name raw_proj resolved_proj
+
+    for alias_name in ${AGENT_CONFIG_PROJECTS[@]+"${AGENT_CONFIG_PROJECTS[@]}"}; do
+        [ -n "$alias_name" ] || continue
+        raw_proj="${PROJECT_PATHS[$alias_name]:-}"
+        if [ -n "$raw_proj" ]; then
+            if resolved_proj="$(resolve_project_path "$raw_proj")"; then
+                mig_projects+=("$resolved_proj")
+            else
+                echo "⚠️ Cannot resolve legacy project alias '$alias_name': $raw_proj" >&2
+                SUMMARY_WARNINGS+=("Unresolved legacy agent project alias: $alias_name")
+            fi
+        elif [[ "$alias_name" == /* || "$alias_name" == "~/"* || "$alias_name" =~ ^[A-Za-z]:[/\\] ]]; then
+            mig_projects+=("$(expand_tilde "$alias_name")")
+        else
+            echo "⚠️ Unknown legacy AGENT_CONFIG_PROJECTS alias during migration: $alias_name" >&2
+            SUMMARY_WARNINGS+=("Unknown legacy agent project alias: $alias_name")
+        fi
+    done
+
+    echo "⚠️ Migrating legacy agent settings from ~/.bashrc.local to $INSTALL_CONF (legacy variables in ~/.bashrc.local are no longer read)" >&2
+    SUMMARY_WARNINGS+=("Migrated legacy agent settings from ~/.bashrc.local to $INSTALL_CONF")
+    write_agents_conf "$mig_enabled" "$mig_repo" "$mig_dir" ${mig_projects[@]+"${mig_projects[@]}"}
+}
+
 sync_agent_config() {
+    migrate_legacy_agent_config
+
+    local eff_enabled="false"
+    local eff_repo="$DEFAULT_AGENT_REPO"
+    local eff_dir="$DEFAULT_AGENT_DIR"
+    local eff_projects=()
+
+    if conf_has_agents_section; then
+        local val
+        val="$(git config --file "$INSTALL_CONF" --get agents.enabled 2>/dev/null || true)"
+        [ -n "$val" ] && eff_enabled="$val"
+        val="$(git config --file "$INSTALL_CONF" --get agents.repo 2>/dev/null || true)"
+        [ -n "$val" ] && eff_repo="$val"
+        val="$(git config --file "$INSTALL_CONF" --get agents.dir 2>/dev/null || true)"
+        [ -n "$val" ] && eff_dir="$val"
+        while IFS= read -r val; do
+            [ -n "$val" ] && eff_projects+=("$val")
+        done < <(git config --file "$INSTALL_CONF" --get-all agents.project 2>/dev/null || true)
+    fi
+
+    local cli_override=0
+    if [ "$CLI_AGENTS" = "1" ]; then
+        eff_enabled="true"
+        cli_override=1
+    fi
+    if [ -n "$CLI_AGENT_REPO" ]; then
+        eff_repo="$CLI_AGENT_REPO"
+        cli_override=1
+    fi
+    if [ -n "$CLI_AGENT_DIR" ]; then
+        eff_dir="$CLI_AGENT_DIR"
+        cli_override=1
+    fi
+    if [ "$CLI_AGENT_PROJECTS_SET" = "1" ]; then
+        eff_projects=("${CLI_AGENT_PROJECTS[@]}")
+        cli_override=1
+    fi
+
+    if [ "$cli_override" = "1" ]; then
+        write_agents_conf "$eff_enabled" "$eff_repo" "$eff_dir" ${eff_projects[@]+"${eff_projects[@]}"}
+    fi
+
     if [ "$SKIP_AGENTS" = "1" ]; then
         echo "ℹ️  Skipping Antigravity agent config (--skip-agents)"
         SUMMARY_SKIPPED+=("Agent config (--skip-agents)")
         return 0
     fi
 
-    if [ "${INSTALL_AGENT_CONFIG:-false}" != "true" ] && [ "$ONLY_AGENTS" != "1" ]; then
-        echo "ℹ️  Skipping Antigravity agent config (INSTALL_AGENT_CONFIG=${INSTALL_AGENT_CONFIG:-false})"
-        SUMMARY_SKIPPED+=("Agent config (disabled in ~/.bashrc.local)")
+    if [ "$eff_enabled" != "true" ] && [ "$ONLY_AGENTS" != "1" ]; then
+        echo "ℹ️  Skipping Antigravity agent config (agents.enabled=$eff_enabled)"
+        SUMMARY_SKIPPED+=("Agent config (disabled)")
         return 0
     fi
 
-    local repo="${AGENT_CONFIG_REPO:-https://github.com/wieseknows/my-agent-config.git}"
-    local dir="${AGENT_CONFIG_DIR:-$HOME/.local/share/my-agent-config}"
+    local repo="$eff_repo"
+    local dir
+    dir="$(expand_tilde "$eff_dir")"
     echo "🤖 Syncing Antigravity agent config ($dir)..."
 
     if [ -d "$dir/.git" ]; then
@@ -358,23 +503,13 @@ sync_agent_config() {
     local args=("--global")
     [ "$DRY_RUN" = "1" ] && args+=("--dry-run")
 
-    local alias_name raw_proj resolved_proj
-    for alias_name in ${AGENT_CONFIG_PROJECTS[@]+"${AGENT_CONFIG_PROJECTS[@]}"}; do
-        [ -n "$alias_name" ] || continue
-        raw_proj="${PROJECT_PATHS[$alias_name]:-}"
-        if [ -z "$raw_proj" ]; then
-            echo "⚠️ Unknown AGENT_CONFIG_PROJECTS alias: $alias_name" >&2
-            SUMMARY_WARNINGS+=("Unknown agent project alias: $alias_name")
-            continue
-        fi
-        if ! resolved_proj="$(resolve_project_path "$raw_proj")"; then
-            echo "⚠️ Cannot resolve path for project alias '$alias_name': $raw_proj" >&2
-            SUMMARY_WARNINGS+=("Unresolved path for project alias: $alias_name")
-            continue
-        fi
+    local raw_proj resolved_proj
+    for raw_proj in ${eff_projects[@]+"${eff_projects[@]}"}; do
+        [ -n "$raw_proj" ] || continue
+        resolved_proj="$(expand_tilde "$raw_proj")"
         if [ ! -d "$resolved_proj" ]; then
-            echo "⚠️ Project directory does not exist for '$alias_name': $resolved_proj" >&2
-            SUMMARY_WARNINGS+=("Missing directory for project '$alias_name': $resolved_proj")
+            echo "⚠️ Agent project directory does not exist: $resolved_proj" >&2
+            SUMMARY_WARNINGS+=("Missing agent project directory: $resolved_proj")
             continue
         fi
         args+=("--project" "$resolved_proj")

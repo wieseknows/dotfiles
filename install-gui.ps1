@@ -11,6 +11,9 @@ $ErrorActionPreference = "Stop"
 $DotfilesDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $HomeDir = $env:USERPROFILE
 $BashrcLocalPath = Join-Path $HomeDir ".bashrc.local"
+$InstallConfPath = Join-Path $HomeDir ".config\dotfiles\install.conf"
+$DefaultAgentRepo = "https://github.com/wieseknows/my-agent-config.git"
+$DefaultAgentDir = "~/.local/share/my-agent-config"
 
 function Convert-WindowsPathToGitBash {
     param([string]$Path)
@@ -77,6 +80,21 @@ function Find-GitBash {
     return $null
 }
 
+function Find-GitExe {
+    $gitCmd = Get-Command git.exe -ErrorAction SilentlyContinue
+    if ($gitCmd) { return $gitCmd.Source }
+
+    $candidates = @(
+        "C:\Program Files\Git\cmd\git.exe",
+        (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe"),
+        "C:\Program Files (x86)\Git\cmd\git.exe"
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) { return $candidate }
+    }
+    return $null
+}
+
 function Unquote-BashValue {
     param([string]$Raw)
     $s = $Raw.Trim()
@@ -111,9 +129,9 @@ function Read-ExistingConfig {
         GitReviewProvider = "openrouter"
         GeminiApiKey      = ""
         DeepSeekApiKey    = ""
+        ProjectsRoot      = "/c/dev/projects"
         ProjectPaths      = [System.Collections.Generic.List[PSCustomObject]]::new()
     }
-    $legacyProjectsRoot = "/c/dev/projects"
 
     if (Test-Path $BashrcLocalPath) {
         $lines = Get-Content -Path $BashrcLocalPath -Encoding UTF8
@@ -157,13 +175,13 @@ function Read-ExistingConfig {
                     "GIT_REVIEW_PROVIDER" { if ($val) { $cfg.GitReviewProvider = $val } }
                     "GEMINI_API_KEY"      { if ($val -ne "your_gemini_api_key_here") { $cfg.GeminiApiKey = $val } }
                     "DEEPSEEK_API_KEY"    { if ($val -ne "your_deepseek_api_key_here") { $cfg.DeepSeekApiKey = $val } }
-                    "PROJECTS_ROOT"       { if ($val) { $legacyProjectsRoot = $val } }
+                    "PROJECTS_ROOT"       { if ($val) { $cfg.ProjectsRoot = $val } }
                 }
             }
         }
 
-        # Migrate legacy relative paths (from PROJECTS_ROOT) to full paths
-        $rootPrefix = $legacyProjectsRoot.TrimEnd('/', '\')
+        # Resolve any relative paths against PROJECTS_ROOT for display
+        $rootPrefix = $cfg.ProjectsRoot.TrimEnd('/', '\')
         foreach ($item in $cfg.ProjectPaths) {
             $p = $item.Path -replace '\\', '/'
             if ($p -notmatch '^(/|~|[A-Za-z]:[/\\])' -and -not [string]::IsNullOrWhiteSpace($rootPrefix)) {
@@ -231,6 +249,7 @@ function Write-BashrcLocalFile {
     [void]$sb.Append("`n")
 
     [void]$sb.Append("# 4. Project Navigation`n")
+    [void]$sb.Append("export PROJECTS_ROOT=`"$(Escape-BashDoubleQuoted $Config.ProjectsRoot)`"`n")
     [void]$sb.Append("declare -g -A PROJECT_PATHS=(`n")
     foreach ($item in $Config.ProjectPaths) {
         $a = Escape-BashDoubleQuoted $item.Alias
@@ -256,6 +275,79 @@ function Write-BashrcLocalFile {
     }
     [System.IO.File]::WriteAllText($BashrcLocalPath, $newContent, $utf8NoBom)
     return $true
+}
+
+function Read-AgentConfig {
+    $agentCfg = @{
+        Enabled  = $false
+        Repo     = $DefaultAgentRepo
+        Dir      = $DefaultAgentDir
+        Projects = [System.Collections.Generic.List[string]]::new()
+    }
+
+    $gitExe = Find-GitExe
+    if (-not $gitExe -or -not (Test-Path $InstallConfPath)) {
+        return $agentCfg
+    }
+
+    $enabledRaw = (& $gitExe config --file $InstallConfPath --get agents.enabled 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $enabledRaw -and $enabledRaw.Trim().ToLowerInvariant() -eq "true") {
+        $agentCfg.Enabled = $true
+    }
+
+    $repoRaw = (& $gitExe config --file $InstallConfPath --get agents.repo 2>$null)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($repoRaw)) {
+        $agentCfg.Repo = $repoRaw.Trim()
+    }
+
+    $dirRaw = (& $gitExe config --file $InstallConfPath --get agents.dir 2>$null)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($dirRaw)) {
+        $agentCfg.Dir = $dirRaw.Trim()
+    }
+
+    $projRaw = (& $gitExe config --file $InstallConfPath --get-all agents.project 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $projRaw) {
+        foreach ($line in $projRaw) {
+            if (-not [string]::IsNullOrWhiteSpace($line)) {
+                $agentCfg.Projects.Add(($line.Trim() -replace '\\', '/'))
+            }
+        }
+    }
+
+    return $agentCfg
+}
+
+function Save-AgentConfig {
+    param(
+        [bool]$Enabled,
+        [string]$Repo,
+        [string]$Dir,
+        [System.Collections.Generic.List[string]]$Projects
+    )
+
+    $gitExe = Find-GitExe
+    if (-not $gitExe) { return }
+
+    $confDir = Split-Path -Parent $InstallConfPath
+    if (-not (Test-Path $confDir)) {
+        New-Item -ItemType Directory -Path $confDir -Force | Out-Null
+    }
+
+    $enabledStr = if ($Enabled) { "true" } else { "false" }
+    & $gitExe config --file $InstallConfPath agents.enabled $enabledStr
+    if (-not [string]::IsNullOrWhiteSpace($Repo)) {
+        & $gitExe config --file $InstallConfPath agents.repo $Repo.Trim()
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Dir)) {
+        & $gitExe config --file $InstallConfPath agents.dir $Dir.Trim()
+    }
+    & $gitExe config --file $InstallConfPath --unset-all agents.project 2>$null
+    $global:LASTEXITCODE = 0
+    foreach ($p in $Projects) {
+        if (-not [string]::IsNullOrWhiteSpace($p)) {
+            & $gitExe config --file $InstallConfPath --add agents.project $p
+        }
+    }
 }
 
 function Show-OpenFileDialog {
@@ -322,6 +414,10 @@ function Show-FolderDialog {
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="#CDD6F4"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="Expander">
+            <Setter Property="Foreground" Value="#CDD6F4"/>
+            <Setter Property="BorderBrush" Value="#45475A"/>
         </Style>
         <Style TargetType="Button">
             <Setter Property="Background" Value="#313244"/>
@@ -472,8 +568,15 @@ function Show-FolderDialog {
                         <ListView x:Name="LvProjects" Height="190" Background="#1E1E2E" Foreground="#CDD6F4" BorderBrush="#45475A" Margin="0,0,0,8">
                             <ListView.View>
                                 <GridView>
-                                    <GridViewColumn Header="Alias" Width="140" DisplayMemberBinding="{Binding Alias}"/>
-                                    <GridViewColumn Header="Project Path" Width="460" DisplayMemberBinding="{Binding Path}"/>
+                                    <GridViewColumn Header="Alias" Width="130" DisplayMemberBinding="{Binding Alias}"/>
+                                    <GridViewColumn Header="Project Path" Width="385" DisplayMemberBinding="{Binding Path}"/>
+                                    <GridViewColumn Header="Agent rules" Width="85">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <CheckBox IsChecked="{Binding AgentRules, Mode=TwoWay}" HorizontalAlignment="Center"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
                                 </GridView>
                             </ListView.View>
                         </ListView>
@@ -500,7 +603,32 @@ function Show-FolderDialog {
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Tab 4: Install Log -->
+            <!-- Tab 4: Agents -->
+            <TabItem Header="Agents">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="Antigravity Agent Configuration (my-agent-config)" FontSize="15" FontWeight="SemiBold" Foreground="#89B4FA" Margin="0,0,0,8"/>
+                        <TextBlock Text="Syncs global rules (~/.gemini/) and installs .agents/rules and .agents/workflows for projects checked on the Projects &amp; Tools tab. Stored in ~/.config/dotfiles/install.conf."
+                                   Foreground="#A6ADC8" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                        <CheckBox x:Name="ChkInstallAgents" Content="Install Antigravity agent config" Margin="0,0,0,12"/>
+
+                        <Expander Header="Advanced" IsExpanded="False" Margin="0,0,0,12" Padding="8,6">
+                            <StackPanel Margin="0,8,0,0">
+                                <TextBlock Text="Repository URL" Margin="0,0,0,4" Foreground="#A6ADC8"/>
+                                <TextBox x:Name="TxtAgentRepo" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Local Clone Directory" Margin="0,0,0,4" Foreground="#A6ADC8"/>
+                                <TextBox x:Name="TxtAgentDir"/>
+                            </StackPanel>
+                        </Expander>
+
+                        <CheckBox x:Name="ChkDryRun" Content="Dry run (preview planned actions without modifying files)"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Tab 5: Install Log -->
             <TabItem Header="Install Log" x:Name="TabLog">
                 <Grid Margin="14">
                     <TextBox x:Name="TxtLog" IsReadOnly="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
@@ -558,6 +686,10 @@ $btnBrowseProjectSubdir = $window.FindName("BtnBrowseProjectSubdir")
 $btnAddProject         = $window.FindName("BtnAddProject")
 $btnRemoveProject      = $window.FindName("BtnRemoveProject")
 $chkInstallGitReview   = $window.FindName("ChkInstallGitReview")
+$chkInstallAgents      = $window.FindName("ChkInstallAgents")
+$txtAgentRepo          = $window.FindName("TxtAgentRepo")
+$txtAgentDir           = $window.FindName("TxtAgentDir")
+$chkDryRun             = $window.FindName("ChkDryRun")
 $txtLog                = $window.FindName("TxtLog")
 $txtStatus             = $window.FindName("TxtStatus")
 $btnInstall            = $window.FindName("BtnInstall")
@@ -599,8 +731,35 @@ $pwdOpenRouter.Password = $initial.OpenRouterApiKey
 $pwdGemini.Password = $initial.GeminiApiKey
 $pwdDeepSeek.Password = $initial.DeepSeekApiKey
 
+$agentCfg = Read-AgentConfig
+$chkInstallAgents.IsChecked = $agentCfg.Enabled
+$txtAgentRepo.Text = $agentCfg.Repo
+$txtAgentDir.Text = $agentCfg.Dir
+
+function Normalize-ProjectPathForCompare {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return "" }
+    $p = ($Path.Trim() -replace '\\', '/').TrimEnd('/')
+    if ($p.StartsWith('$HOME/')) { $p = '~/' + $p.Substring(6) }
+    return $p
+}
+
 $projectsCollection = [System.Collections.ObjectModel.ObservableCollection[PSCustomObject]]::new()
-foreach ($p in $initial.ProjectPaths) { $projectsCollection.Add($p) }
+foreach ($p in $initial.ProjectPaths) {
+    $normP = Normalize-ProjectPathForCompare $p.Path
+    $isAgentProj = $false
+    foreach ($ap in $agentCfg.Projects) {
+        if ((Normalize-ProjectPathForCompare $ap) -eq $normP) {
+            $isAgentProj = $true
+            break
+        }
+    }
+    $projectsCollection.Add([PSCustomObject]@{
+        Alias      = $p.Alias
+        Path       = $p.Path
+        AgentRules = $isAgentProj
+    })
+}
 $lvProjects.ItemsSource = $projectsCollection
 
 function Update-PpkWarning {
@@ -676,7 +835,7 @@ function Add-PendingProject {
             break
         }
     }
-    $projectsCollection.Add([PSCustomObject]@{ Alias = $alias; Path = $path })
+    $projectsCollection.Add([PSCustomObject]@{ Alias = $alias; Path = $path; AgentRules = $false })
     $txtNewAlias.Text = ""
     $txtNewProjPath.Text = ""
     return $true
@@ -714,11 +873,12 @@ $btnInstall.Add_Click({
         return
     }
 
+    $isDryRun = [bool]$chkDryRun.IsChecked
     $btnInstall.IsEnabled = $false
     $btnClose.IsEnabled = $false
-    $txtStatus.Text = "Applying configuration..."
+    $txtStatus.Text = if ($isDryRun) { "Running dry-run preview..." } else { "Applying configuration..." }
     $mainTabs.SelectedItem = $tabLog
-    $txtLog.Text = "Writing $BashrcLocalPath ...`r`n"
+    $txtLog.Text = if ($isDryRun) { "[dry-run] Skipping ~/.bashrc.local and install.conf writes...`r`n" } else { "Writing $BashrcLocalPath ...`r`n" }
 
     try {
         $sshList = [System.Collections.Generic.List[string]]::new()
@@ -734,22 +894,67 @@ $btnInstall.Add_Click({
             OpenRouterApiKey  = Get-SecretValue $pwdOpenRouter $txtOpenRouterVisible $chkShowOpenRouter
             GeminiApiKey      = Get-SecretValue $pwdGemini $txtGeminiVisible $chkShowGemini
             DeepSeekApiKey    = Get-SecretValue $pwdDeepSeek $txtDeepSeekVisible $chkShowDeepSeek
+            ProjectsRoot      = $initial.ProjectsRoot
             ProjectPaths      = $projectsCollection
         }
 
-        $wroteLocal = Write-BashrcLocalFile -Config $cfgToWrite
-        if ($wroteLocal) {
-            $txtLog.AppendText("Saved ~/.bashrc.local successfully.`r`n")
-        } else {
-            $txtLog.AppendText("~/.bashrc.local is unchanged.`r`n")
+        $agentEnabled = [bool]$chkInstallAgents.IsChecked
+        $agentRepo = $txtAgentRepo.Text.Trim()
+        $agentDir = $txtAgentDir.Text.Trim()
+        $agentProjects = [System.Collections.Generic.List[string]]::new()
+        foreach ($projItem in $projectsCollection) {
+            if ($projItem.AgentRules) {
+                $ap = ($projItem.Path -replace '\\', '/').Trim()
+                if ($ap -match '^[A-Za-z]:/') {
+                    $ap = Convert-WindowsPathToGitBash $ap
+                }
+                if ($ap.StartsWith('$HOME/')) {
+                    $ap = '~/' + $ap.Substring(6)
+                }
+                if (-not [string]::IsNullOrWhiteSpace($ap)) {
+                    $agentProjects.Add($ap)
+                }
+            }
+        }
+
+        if (-not $isDryRun) {
+            $wroteLocal = Write-BashrcLocalFile -Config $cfgToWrite
+            if ($wroteLocal) {
+                $txtLog.AppendText("Saved ~/.bashrc.local successfully.`r`n")
+            } else {
+                $txtLog.AppendText("~/.bashrc.local is unchanged.`r`n")
+            }
+            Save-AgentConfig -Enabled $agentEnabled -Repo $agentRepo -Dir $agentDir -Projects $agentProjects
         }
         $txtLog.AppendText("Running install.sh via $gitBash ...`r`n`r`n")
 
         $installSh = (Join-Path $DotfilesDir "install.sh") -replace '\\', '/'
+        $argList = [System.Collections.Generic.List[string]]::new()
+        $argList.Add("`"$installSh`"")
+        if ($agentEnabled) {
+            $argList.Add("--agents")
+            if (-not [string]::IsNullOrWhiteSpace($agentRepo)) {
+                $argList.Add("--agent-repo")
+                $argList.Add("`"$agentRepo`"")
+            }
+            if (-not [string]::IsNullOrWhiteSpace($agentDir)) {
+                $argList.Add("--agent-dir")
+                $argList.Add("`"$agentDir`"")
+            }
+            foreach ($ap in $agentProjects) {
+                $argList.Add("--agent-project")
+                $argList.Add("`"$ap`"")
+            }
+        } else {
+            $argList.Add("--skip-agents")
+        }
+        if ($isDryRun) {
+            $argList.Add("--dry-run")
+        }
 
         $psi = [System.Diagnostics.ProcessStartInfo]::new()
         $psi.FileName = $gitBash
-        $psi.Arguments = "`"$installSh`""
+        $psi.Arguments = ($argList -join " ")
         $psi.EnvironmentVariables["NONINTERACTIVE"] = "1"
         $psi.EnvironmentVariables["INSTALL_GITREVIEW"] = if ($chkInstallGitReview.IsChecked) { "1" } else { "0" }
         $psi.UseShellExecute = $false

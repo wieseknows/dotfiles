@@ -26,12 +26,3 @@ export PROJECTS_ROOT="/c/dev/projects"
 declare -g -A PROJECT_PATHS=(
     # ["app"]="/c/dev/projects/my-app/web"
 )
-
-# 5. Antigravity Agent Configuration (wieseknows/my-agent-config)
-export INSTALL_AGENT_CONFIG=false
-export AGENT_CONFIG_REPO="https://github.com/wieseknows/my-agent-config.git"
-export AGENT_CONFIG_DIR="$HOME/.local/share/my-agent-config"
-# Project aliases from PROJECT_PATHS to receive .agents/rules and .agents/workflows
-AGENT_CONFIG_PROJECTS=(
-    # "app"
-)

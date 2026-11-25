@@ -18,7 +18,7 @@ cd dotfiles
 ### Step 2. Run the installer
 
 * **Windows (GUI Setup Wizard — recommended):** simply double-click **`install.bat`**.
-  The graphical wizard lets you enter your Git name/email, browse and pick SSH keys and project folders, enter API keys securely, and toggle optional tools.
+  The graphical wizard lets you enter your Git name/email, browse and pick SSH keys and project folders, enter API keys securely, and configure optional tools including Antigravity agent sync (**Agents** tab + **Agent rules** checkboxes on the **Projects & Tools** tab).
   *(To run the interactive console installer on Windows, use `install.bat --cli`).*
 
   ![Dotfiles Setup Wizard](assets/setup-wizard.png)
@@ -26,10 +26,10 @@ cd dotfiles
   ```bash
   ./install.sh
   ```
-  The installer will interactively ask for your Git identity, SSH keys, optional AI/GitReview API keys, and whether to sync Antigravity agent config on first run.
+  The installer will interactively ask for your Git identity, SSH keys, and optional AI/GitReview API keys on first run.
   * To re-run the interactive configuration later, use `./install.sh --reconfigure`.
   * For automated / headless installation, set `NONINTERACTIVE=1 ./install.sh` or `CI=1 ./install.sh` (optionally passing `GIT_USER_NAME`, `GIT_USER_EMAIL`, etc. via environment variables).
-  * Useful flags: `--skip-agents`, `--only-agents`, `--dry-run`, `--help`.
+  * Useful flags: `--agents`, `--agent-project <path>`, `--agent-repo <url>`, `--agent-dir <path>`, `--skip-agents`, `--only-agents`, `--dry-run`, `--help`.
 
 ### Step 3. Reload Bash
 
@@ -44,13 +44,28 @@ source ~/.bashrc
 
 `dotfiles` acts as the orchestrator for [wieseknows/my-agent-config](https://github.com/wieseknows/my-agent-config) without using Git submodules.
 
-In `~/.bashrc.local` (see `.bashrc.local.template`):
-* `INSTALL_AGENT_CONFIG=true|false` — enable/disable agent config sync.
-* `AGENT_CONFIG_REPO` — repository URL (default: `https://github.com/wieseknows/my-agent-config.git`).
-* `AGENT_CONFIG_DIR` — local clone path (default: `$HOME/.local/share/my-agent-config`).
-* `AGENT_CONFIG_PROJECTS` — array of aliases from `PROJECT_PATHS` where `.agents/rules/` and `.agents/workflows/` should be installed. Leave empty for global-only (`~/.gemini/`).
+Installer preferences are stored separately from shell runtime settings in `~/.config/dotfiles/install.conf` (in `git-config` format, read and written via `git config --file`):
+```ini
+[agents]
+    enabled = true
+    repo = https://github.com/wieseknows/my-agent-config.git
+    dir = ~/.local/share/my-agent-config
+    project = /c/dev/projects/app/web
+```
 
-When enabled, `./install.sh` performs a shallow clone or `git pull --ff-only`, then invokes `my-agent-config/install.sh --global` and `--project <path>` for each selected alias. If the network or agent step fails, `dotfiles` logs a warning, continues the rest of the setup, and reports the issue in the final summary.
+`~/.bashrc.local` only holds shell runtime settings (`GIT_USER_NAME`, `GIT_USER_EMAIL`, `SSH_KEYS`, `AZURE_SSH_KEY`, AI API keys, `PROJECTS_ROOT`, and `PROJECT_PATHS`).
+
+CLI flags (precedence: `CLI flags > ~/.config/dotfiles/install.conf > disabled by default`):
+* `--agents` — enable agent config sync and persist `agents.enabled = true` in `install.conf`.
+* `--agent-project <path>` — absolute path to a project directory to receive `.agents/rules/` and `.agents/workflows/` (repeatable).
+* `--agent-repo <url>` — override repository URL (default: `https://github.com/wieseknows/my-agent-config.git`).
+* `--agent-dir <path>` — override local clone path (default: `~/.local/share/my-agent-config`).
+* `--skip-agents` / `--only-agents` — skip or run only the agent sync step.
+
+When enabled, `./install.sh` performs a shallow clone or `git pull --ff-only`, then invokes `my-agent-config/install.sh --global` and `--project <path>` for each configured project. If the network or agent step fails, `dotfiles` logs a warning, continues the rest of the setup, and reports the issue in the final summary.
+
+> [!NOTE]
+> **Migration from older setups:** If your existing `~/.bashrc.local` still contains `INSTALL_AGENT_CONFIG` or `AGENT_CONFIG_*`, `install.sh` migrates them once into `~/.config/dotfiles/install.conf` (resolving `AGENT_CONFIG_PROJECTS` aliases via `PROJECT_PATHS`), logs a warning, and ignores the legacy variables afterwards without modifying `~/.bashrc.local`.
 
 ---
 
