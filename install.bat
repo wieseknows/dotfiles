@@ -2,7 +2,10 @@
 setlocal enabledelayedexpansion
 title Dotfiles Installer
 
-if /I "%~1"=="--cli" goto :cli_mode
+if /I "%~1"=="--cli" (
+    shift
+    goto :cli_mode
+)
 
 where powershell.exe >nul 2>&1
 if %ERRORLEVEL%==0 (
@@ -39,4 +42,4 @@ if not defined GIT_BASH (
 )
 
 set "PAUSE_ON_EXIT=1"
-"!GIT_BASH!" "%~dp0install.sh"
+"!GIT_BASH!" "%~dp0install.sh" %1 %2 %3 %4 %5

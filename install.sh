@@ -9,6 +9,22 @@ RECONFIGURE=0
 for arg in "$@"; do
     case "$arg" in
         --reconfigure|-r) RECONFIGURE=1 ;;
+        --help|-h)
+            cat << 'EOF'
+Usage: ./install.sh [OPTIONS]
+
+Options:
+  -r, --reconfigure   Interactively reconfigure ~/.bashrc.local (preserves existing values as defaults)
+  -h, --help          Show this help message
+
+Environment variables:
+  NONINTERACTIVE=1    Skip interactive prompts (uses existing/env defaults)
+  INSTALL_GITREVIEW=0 Skip wieseknows.GitReview .NET tool installation
+  UPDATE_GITREVIEW=1  Update wieseknows.GitReview if already installed
+  PAUSE_ON_EXIT=1     Wait for Enter before exiting in interactive mode
+EOF
+            exit 0
+            ;;
     esac
 done
 
@@ -52,6 +68,28 @@ escape_bash_dq() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+# Insert or replace a marker-delimited block in target; returns 0 if updated, 1 if unchanged
+upsert_marked_block() {
+    local target="$1" start_marker="$2" end_marker="$3" block="$4"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    if [ -f "$target" ] && grep -Fq "$start_marker" "$target" && grep -Fq "$end_marker" "$target"; then
+        awk -v start="$start_marker" -v end="$end_marker" -v block="$block" '
+            $0 == start { print block; skip = 1; next }
+            $0 == end && skip { skip = 0; next }
+            !skip { print }
+        ' "$target" > "$tmp_file"
+    else
+        if [ -f "$target" ]; then
+            cat "$target" > "$tmp_file"
+            [ -s "$tmp_file" ] && [ -n "$(tail -c 1 "$tmp_file")" ] && echo "" >> "$tmp_file"
+            echo "" >> "$tmp_file"
+        fi
+        printf '%s\n' "$block" >> "$tmp_file"
+    fi
+    write_file_if_changed "$target" "$tmp_file"
+}
+
 # ----------------------------------------------------
 # 1. Idempotent dotfiles loader in ~/.bashrc
 # ----------------------------------------------------
@@ -85,25 +123,7 @@ $LOADER_END
 EOF
 )"
 
-tmp_bashrc="$(mktemp)"
-if [ -f "$BASHRC_TARGET" ] && grep -Fq "$LOADER_START" "$BASHRC_TARGET" && grep -Fq "$LOADER_END" "$BASHRC_TARGET"; then
-    awk -v start="$LOADER_START" -v end="$LOADER_END" -v block="$loader_block" '
-        $0 == start { print block; skip = 1; next }
-        $0 == end && skip { skip = 0; next }
-        !skip { print }
-    ' "$BASHRC_TARGET" > "$tmp_bashrc"
-else
-    if [ -f "$BASHRC_TARGET" ]; then
-        cat "$BASHRC_TARGET" > "$tmp_bashrc"
-        if [ -s "$tmp_bashrc" ] && [ -n "$(tail -c 1 "$tmp_bashrc")" ]; then
-            echo "" >> "$tmp_bashrc"
-        fi
-        echo "" >> "$tmp_bashrc"
-    fi
-    printf '%s\n' "$loader_block" >> "$tmp_bashrc"
-fi
-
-if write_file_if_changed "$BASHRC_TARGET" "$tmp_bashrc"; then
+if upsert_marked_block "$BASHRC_TARGET" "$LOADER_START" "$LOADER_END" "$loader_block"; then
     echo "✅ Dotfiles loader updated in $BASHRC_TARGET"
 else
     echo "ℹ️  Dotfiles loader already up to date in $BASHRC_TARGET"
@@ -113,9 +133,12 @@ fi
 # 2. Main Git configuration include
 # ----------------------------------------------------
 DOTFILES_GITCONFIG="$DOTFILES_DIR/.gitconfig"
-DOTFILES_GITCONFIG_WIN="$(cd "$DOTFILES_DIR" && pwd -W 2>/dev/null || true)/.gitconfig"
+DOTFILES_GITCONFIG_WIN=""
+if win_dir="$(cd "$DOTFILES_DIR" && pwd -W 2>/dev/null || true)" && [ -n "$win_dir" ]; then
+    DOTFILES_GITCONFIG_WIN="$win_dir/.gitconfig"
+fi
 
-if git config --global --get-all include.path 2>/dev/null | grep -F -e "$DOTFILES_GITCONFIG" -e "$DOTFILES_GITCONFIG_WIN" -q; then
+if git config --global --get-all include.path 2>/dev/null | grep -F -e "$DOTFILES_GITCONFIG" ${DOTFILES_GITCONFIG_WIN:+-e "$DOTFILES_GITCONFIG_WIN"} -q; then
     echo "ℹ️  Git global include already configured: $DOTFILES_GITCONFIG"
 else
     echo "🔧 Configuring Git global include..."
@@ -155,10 +178,16 @@ prompt_required() {
 }
 
 prompt_secret() {
-    local reply
-    read -rsp "$1 (hidden, Enter to skip): " reply
-    echo "" >&2
-    printf '%s' "$reply"
+    local label="$1" current="${2:-}" reply
+    if [ -n "$current" ]; then
+        read -rsp "$label (already set, Enter to keep, or type new): " reply
+        echo "" >&2
+        printf '%s' "${reply:-$current}"
+    else
+        read -rsp "$label (hidden, Enter to skip): " reply
+        echo "" >&2
+        printf '%s' "$reply"
+    fi
 }
 
 generate_bashrc_local() {
@@ -172,9 +201,13 @@ generate_bashrc_local() {
     local deepseek_key="${DEEPSEEK_API_KEY:-}"
 
     local ssh_keys=() detected_key
-    while IFS= read -r detected_key; do
-        [ -n "$detected_key" ] && ssh_keys+=("$detected_key")
-    done < <(detect_default_ssh_keys)
+    if [ ${#SSH_KEYS[@]} -gt 0 ]; then
+        ssh_keys=("${SSH_KEYS[@]}")
+    else
+        while IFS= read -r detected_key; do
+            [ -n "$detected_key" ] && ssh_keys+=("$detected_key")
+        done < <(detect_default_ssh_keys)
+    fi
 
     if is_interactive; then
         echo ""
@@ -205,9 +238,9 @@ generate_bashrc_local() {
         if [[ "$configure_ai" =~ ^[Yy]$ ]]; then
             provider="$(prompt_with_default "Default AI provider (openrouter/gemini/deepseek)" "$provider")"
             openrouter_model="$(prompt_with_default "OpenRouter model" "$openrouter_model")"
-            openrouter_key="$(prompt_secret "OpenRouter API Key")"
-            gemini_key="$(prompt_secret "Gemini API Key")"
-            deepseek_key="$(prompt_secret "DeepSeek API Key")"
+            openrouter_key="$(prompt_secret "OpenRouter API Key" "$openrouter_key")"
+            gemini_key="$(prompt_secret "Gemini API Key" "$gemini_key")"
+            deepseek_key="$(prompt_secret "DeepSeek API Key" "$deepseek_key")"
         fi
     fi
 
@@ -239,7 +272,14 @@ generate_bashrc_local() {
         echo ""
         echo "# 4. Project Navigation (\`proj <alias>\`)"
         echo "declare -g -A PROJECT_PATHS=("
-        echo "    # [\"app\"]=\"/c/dev/projects/my-app/web\""
+        if [ ${#PROJECT_PATHS[@]} -gt 0 ]; then
+            local proj_alias
+            for proj_alias in "${!PROJECT_PATHS[@]}"; do
+                echo "    [\"$(escape_bash_dq "$proj_alias")\"]=\"$(escape_bash_dq "${PROJECT_PATHS[$proj_alias]}")\""
+            done
+        else
+            echo "    # [\"app\"]=\"/c/dev/projects/my-app/web\""
+        fi
         echo ")"
     } > "$tmp_local"
 
@@ -250,15 +290,19 @@ generate_bashrc_local() {
     fi
 }
 
-if [ ! -f "$HOME/.bashrc.local" ] || [ "$RECONFIGURE" = "1" ]; then
-    generate_bashrc_local
-else
-    echo "ℹ️  $HOME/.bashrc.local exists (run with --reconfigure to update interactively)"
-fi
-
 if [ -f "$HOME/.bashrc.local" ]; then
+    # Load existing settings first so --reconfigure preserves them as defaults
     # shellcheck source=/dev/null
     source "$HOME/.bashrc.local"
+fi
+
+if [ ! -f "$HOME/.bashrc.local" ] || [ "$RECONFIGURE" = "1" ]; then
+    generate_bashrc_local
+    # Reload newly generated settings for subsequent steps
+    # shellcheck source=/dev/null
+    source "$HOME/.bashrc.local"
+else
+    echo "ℹ️  $HOME/.bashrc.local exists (run with --reconfigure to update interactively)"
 fi
 
 # ----------------------------------------------------
@@ -331,25 +375,28 @@ validate_ssh_keys
 # ----------------------------------------------------
 # 6. Azure DevOps host entry in ~/.ssh/config (optional)
 # ----------------------------------------------------
+AZURE_START="# >>> dotfiles azure ssh >>>"
+AZURE_END="# <<< dotfiles azure ssh <<<"
+SSH_CONFIG="$HOME/.ssh/config"
+
 if [ -n "${AZURE_SSH_KEY:-}" ]; then
-    SSH_CONFIG="$HOME/.ssh/config"
-    mkdir -p "$HOME/.ssh"
-    chmod 700 "$HOME/.ssh" 2>/dev/null || true
-
-    if [ ! -f "$SSH_CONFIG" ] || ! grep -q "ssh.dev.azure.com" "$SSH_CONFIG" 2>/dev/null; then
-        echo "🌐 Adding Azure DevOps entry to ~/.ssh/config..."
-        cat << EOF >> "$SSH_CONFIG"
-
+    azure_block="$(cat << EOF
+$AZURE_START
 Host ssh.dev.azure.com vs-ssh.visualstudio.com
     HostName ssh.dev.azure.com
     IdentityFile $AZURE_SSH_KEY
     IdentitiesOnly yes
     PubkeyAcceptedKeyTypes +ssh-rsa
+$AZURE_END
 EOF
+)"
+    if [ -f "$SSH_CONFIG" ] && grep -q "ssh.dev.azure.com" "$SSH_CONFIG" 2>/dev/null && ! grep -Fq "$AZURE_START" "$SSH_CONFIG"; then
+        echo "ℹ️  Custom Azure DevOps entry already present in ~/.ssh/config"
+    elif upsert_marked_block "$SSH_CONFIG" "$AZURE_START" "$AZURE_END" "$azure_block"; then
         chmod 600 "$SSH_CONFIG" 2>/dev/null || true
         echo "✅ Configured Azure DevOps in ~/.ssh/config"
     else
-        echo "ℹ️  Azure DevOps entry already present in ~/.ssh/config"
+        echo "ℹ️  Azure DevOps entry already up to date in ~/.ssh/config"
     fi
 else
     echo "ℹ️  No AZURE_SSH_KEY specified, skipping Azure DevOps SSH configuration"
@@ -389,7 +436,7 @@ if [ -f "$BASHRC_TARGET" ]; then
     fi
 fi
 
-include_count=$(git config --global --get-all include.path 2>/dev/null | grep -F -c -e "$DOTFILES_GITCONFIG" -e "$DOTFILES_GITCONFIG_WIN" || true)
+include_count=$(git config --global --get-all include.path 2>/dev/null | grep -F -c -e "$DOTFILES_GITCONFIG" ${DOTFILES_GITCONFIG_WIN:+-e "$DOTFILES_GITCONFIG_WIN"} || true)
 if [ "${include_count:-0}" -gt 1 ]; then
     echo "🚨 WARNING: Duplicate Git include.path entries ($include_count) for $DOTFILES_GITCONFIG in ~/.gitconfig."
 fi

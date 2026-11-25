@@ -81,7 +81,11 @@ function Unquote-BashValue {
     param([string]$Raw)
     $s = $Raw.Trim()
     if ($s.Length -ge 2) {
-        if (($s.StartsWith('"') -and $s.EndsWith('"')) -or ($s.StartsWith("'") -and $s.EndsWith("'"))) {
+        if ($s.StartsWith('"') -and $s.EndsWith('"')) {
+            $inner = $s.Substring(1, $s.Length - 2)
+            return ($inner -replace '\\"', '"' -replace '\\\\', '\')
+        }
+        if ($s.StartsWith("'") -and $s.EndsWith("'")) {
             return $s.Substring(1, $s.Length - 2)
         }
     }
@@ -171,13 +175,15 @@ function Read-ExistingConfig {
     }
 
     # Fallback to current git config if name/email are still empty
-    if ([string]::IsNullOrWhiteSpace($cfg.GitUserName)) {
-        $gitName = (& git config user.name 2>$null)
-        if ($gitName) { $cfg.GitUserName = $gitName.Trim() }
-    }
-    if ([string]::IsNullOrWhiteSpace($cfg.GitUserEmail)) {
-        $gitEmail = (& git config user.email 2>$null)
-        if ($gitEmail) { $cfg.GitUserEmail = $gitEmail.Trim() }
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        if ([string]::IsNullOrWhiteSpace($cfg.GitUserName)) {
+            $gitName = (& git config user.name 2>$null)
+            if ($gitName) { $cfg.GitUserName = $gitName.Trim() }
+        }
+        if ([string]::IsNullOrWhiteSpace($cfg.GitUserEmail)) {
+            $gitEmail = (& git config user.email 2>$null)
+            if ($gitEmail) { $cfg.GitUserEmail = $gitEmail.Trim() }
+        }
     }
 
     return $cfg
@@ -200,12 +206,12 @@ function Write-BashrcLocalFile {
     [void]$sb.Append("# 2. SSH Keys`n")
     [void]$sb.Append("SSH_KEYS=(`n")
     foreach ($k in $Config.SshKeys) {
-        $bashKey = Convert-WindowsPathToGitBash $k
+        $bashKey = Escape-BashDoubleQuoted (Convert-WindowsPathToGitBash $k)
         [void]$sb.Append("    `"$bashKey`"`n")
     }
     [void]$sb.Append(")`n")
     if (-not [string]::IsNullOrWhiteSpace($Config.AzureSshKey)) {
-        $azureBash = Convert-WindowsPathToGitBash $Config.AzureSshKey
+        $azureBash = Escape-BashDoubleQuoted (Convert-WindowsPathToGitBash $Config.AzureSshKey)
         [void]$sb.Append("export AZURE_SSH_KEY=`"$azureBash`"`n")
     }
     [void]$sb.Append("`n")
@@ -656,12 +662,13 @@ $btnBrowseProjectSubdir.Add_Click({
     }
 })
 
-$btnAddProject.Add_Click({
+function Add-PendingProject {
     $alias = $txtNewAlias.Text.Trim()
     $path = ($txtNewProjPath.Text.Trim() -replace '\\', '/')
+    if ([string]::IsNullOrWhiteSpace($alias) -and [string]::IsNullOrWhiteSpace($path)) { return $true }
     if ([string]::IsNullOrWhiteSpace($alias) -or [string]::IsNullOrWhiteSpace($path)) {
         [System.Windows.MessageBox]::Show("Please enter both an alias and a project path.", "Validation", "OK", "Warning") | Out-Null
-        return
+        return $false
     }
     for ($i = 0; $i -lt $projectsCollection.Count; $i++) {
         if ($projectsCollection[$i].Alias -eq $alias) {
@@ -672,6 +679,11 @@ $btnAddProject.Add_Click({
     $projectsCollection.Add([PSCustomObject]@{ Alias = $alias; Path = $path })
     $txtNewAlias.Text = ""
     $txtNewProjPath.Text = ""
+    return $true
+}
+
+$btnAddProject.Add_Click({
+    [void](Add-PendingProject)
 })
 
 $btnRemoveProject.Add_Click({
@@ -691,6 +703,11 @@ $btnInstall.Add_Click({
         return
     }
 
+    if (-not (Add-PendingProject)) {
+        $mainTabs.SelectedIndex = 2
+        return
+    }
+
     $gitBash = Find-GitBash
     if (-not $gitBash) {
         [System.Windows.MessageBox]::Show("Git Bash (bash.exe) was not found. Please install Git for Windows.", "Missing Git Bash", "OK", "Error") | Out-Null
@@ -698,6 +715,7 @@ $btnInstall.Add_Click({
     }
 
     $btnInstall.IsEnabled = $false
+    $btnClose.IsEnabled = $false
     $txtStatus.Text = "Applying configuration..."
     $mainTabs.SelectedItem = $tabLog
     $txtLog.Text = "Writing $BashrcLocalPath ...`r`n"
@@ -741,26 +759,61 @@ $btnInstall.Add_Click({
         $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
         $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
 
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        $stdout = $proc.StandardOutput.ReadToEnd()
-        $stderr = $proc.StandardError.ReadToEnd()
-        $proc.WaitForExit()
+        $logQueue = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
+        $proc = [System.Diagnostics.Process]::new()
+        $proc.StartInfo = $psi
+        $proc.EnableRaisingEvents = $true
 
-        if ($stdout) { $txtLog.AppendText($stdout + "`r`n") }
-        if ($stderr) { $txtLog.AppendText("STDERR:`r`n" + $stderr + "`r`n") }
-
-        if ($proc.ExitCode -eq 0) {
-            $txtStatus.Text = "Installation completed successfully."
-        } else {
-            $txtStatus.Text = "install.sh exited with code $($proc.ExitCode)."
+        $outHandler = [System.Diagnostics.DataReceivedEventHandler]{
+            param($sender, $e)
+            if ($null -ne $e.Data) { $logQueue.Enqueue($e.Data) }
         }
+        $errHandler = [System.Diagnostics.DataReceivedEventHandler]{
+            param($sender, $e)
+            if ($null -ne $e.Data) { $logQueue.Enqueue("[STDERR] " + $e.Data) }
+        }
+        $proc.add_OutputDataReceived($outHandler)
+        $proc.add_ErrorDataReceived($errHandler)
+
+        [void]$proc.Start()
+        $proc.BeginOutputReadLine()
+        $proc.BeginErrorReadLine()
+
+        $timer = [System.Windows.Threading.DispatcherTimer]::new()
+        $timer.Interval = [TimeSpan]::FromMilliseconds(80)
+        $timer.Add_Tick({
+            $line = $null
+            $appended = $false
+            while ($logQueue.TryDequeue([ref]$line)) {
+                $txtLog.AppendText($line + "`r`n")
+                $appended = $true
+            }
+            if ($appended) { $txtLog.ScrollToEnd() }
+
+            if ($proc.HasExited) {
+                $proc.WaitForExit()
+                while ($logQueue.TryDequeue([ref]$line)) {
+                    $txtLog.AppendText($line + "`r`n")
+                }
+                $txtLog.ScrollToEnd()
+                $timer.Stop()
+                if ($proc.ExitCode -eq 0) {
+                    $txtStatus.Text = "Installation completed successfully."
+                } else {
+                    $txtStatus.Text = "install.sh exited with code $($proc.ExitCode)."
+                }
+                $proc.Dispose()
+                $btnInstall.IsEnabled = $true
+                $btnClose.IsEnabled = $true
+            }
+        }.GetNewClosure())
+        $timer.Start()
     }
     catch {
         $txtLog.AppendText("ERROR: $($_.Exception.Message)`r`n")
         $txtStatus.Text = "Installation failed."
-    }
-    finally {
         $btnInstall.IsEnabled = $true
+        $btnClose.IsEnabled = $true
         $txtLog.ScrollToEnd()
     }
 })
