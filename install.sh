@@ -133,13 +133,6 @@ detect_default_ssh_keys() {
     done
 }
 
-default_projects_root() {
-    case "$(uname -s 2>/dev/null || true)" in
-        MINGW*|MSYS*|CYGWIN*) printf '%s' "/c/dev/projects" ;;
-        *) printf '%s' "$HOME/projects" ;;
-    esac
-}
-
 prompt_with_default() {
     local prompt_text="$1" default_val="$2" reply
     if [ -n "$default_val" ]; then
@@ -177,7 +170,6 @@ generate_bashrc_local() {
     local openrouter_key="${OPENROUTER_API_KEY:-}"
     local gemini_key="${GEMINI_API_KEY:-}"
     local deepseek_key="${DEEPSEEK_API_KEY:-}"
-    local projects_root="${PROJECTS_ROOT:-$(default_projects_root)}"
 
     local ssh_keys=() detected_key
     while IFS= read -r detected_key; do
@@ -207,7 +199,6 @@ generate_bashrc_local() {
         fi
 
         azure_key="$(prompt_with_default "Azure DevOps SSH key (optional)" "$azure_key")"
-        projects_root="$(prompt_with_default "Projects root directory (PROJECTS_ROOT)" "$projects_root")"
 
         local configure_ai
         read -rp "Configure AI / GitReview API keys now? [y/N]: " configure_ai
@@ -247,10 +238,8 @@ generate_bashrc_local() {
         [ -n "$deepseek_key" ] && echo "export DEEPSEEK_API_KEY=\"$(escape_bash_dq "$deepseek_key")\""
         echo ""
         echo "# 4. Project Navigation (\`proj <alias>\`)"
-        echo "export PROJECTS_ROOT=\"$(escape_bash_dq "$projects_root")\""
-        echo ""
         echo "declare -g -A PROJECT_PATHS=("
-        echo "    # [\"app\"]=\"my-app/web\""
+        echo "    # [\"app\"]=\"/c/dev/projects/my-app/web\""
         echo ")"
     } > "$tmp_local"
 

@@ -1,4 +1,4 @@
-# Dotfiles GUI Setup Wizard (WPF)
+﻿# Dotfiles GUI Setup Wizard (WPF)
 # Runs on Windows PowerShell 5.1+ / PowerShell 7+ with -STA.
 
 Add-Type -AssemblyName PresentationFramework
@@ -107,9 +107,9 @@ function Read-ExistingConfig {
         GitReviewProvider = "openrouter"
         GeminiApiKey      = ""
         DeepSeekApiKey    = ""
-        ProjectsRoot      = "/c/dev/projects"
         ProjectPaths      = [System.Collections.Generic.List[PSCustomObject]]::new()
     }
+    $legacyProjectsRoot = "/c/dev/projects"
 
     if (Test-Path $BashrcLocalPath) {
         $lines = Get-Content -Path $BashrcLocalPath -Encoding UTF8
@@ -153,8 +153,19 @@ function Read-ExistingConfig {
                     "GIT_REVIEW_PROVIDER" { if ($val) { $cfg.GitReviewProvider = $val } }
                     "GEMINI_API_KEY"      { if ($val -ne "your_gemini_api_key_here") { $cfg.GeminiApiKey = $val } }
                     "DEEPSEEK_API_KEY"    { if ($val -ne "your_deepseek_api_key_here") { $cfg.DeepSeekApiKey = $val } }
-                    "PROJECTS_ROOT"       { if ($val) { $cfg.ProjectsRoot = $val } }
+                    "PROJECTS_ROOT"       { if ($val) { $legacyProjectsRoot = $val } }
                 }
+            }
+        }
+
+        # Migrate legacy relative paths (from PROJECTS_ROOT) to full paths
+        $rootPrefix = $legacyProjectsRoot.TrimEnd('/', '\')
+        foreach ($item in $cfg.ProjectPaths) {
+            $p = $item.Path -replace '\\', '/'
+            if ($p -notmatch '^(/|~|[A-Za-z]:[/\\])' -and -not [string]::IsNullOrWhiteSpace($rootPrefix)) {
+                $item.Path = "$rootPrefix/$($p.TrimStart('/'))"
+            } else {
+                $item.Path = $p
             }
         }
     }
@@ -214,12 +225,14 @@ function Write-BashrcLocalFile {
     [void]$sb.Append("`n")
 
     [void]$sb.Append("# 4. Project Navigation`n")
-    $projRootBash = Convert-WindowsPathToGitBash $Config.ProjectsRoot
-    [void]$sb.Append("export PROJECTS_ROOT=`"$projRootBash`"`n`n")
     [void]$sb.Append("declare -g -A PROJECT_PATHS=(`n")
     foreach ($item in $Config.ProjectPaths) {
         $a = Escape-BashDoubleQuoted $item.Alias
-        $p = Escape-BashDoubleQuoted ($item.Path -replace '\\', '/')
+        $rawPath = ($item.Path -replace '\\', '/').Trim()
+        if ($rawPath -match '^[A-Za-z]:/') {
+            $rawPath = Convert-WindowsPathToGitBash $rawPath
+        }
+        $p = Escape-BashDoubleQuoted $rawPath
         [void]$sb.Append("    [`"$a`"]=`"$p`"`n")
     }
     [void]$sb.Append(")`n")
@@ -448,22 +461,13 @@ function Show-FolderDialog {
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14">
                     <StackPanel>
                         <TextBlock Text="Project Navigation (`proj &lt;alias&gt;`)" FontSize="15" FontWeight="SemiBold" Foreground="#89B4FA" Margin="0,0,0,8"/>
-                        <TextBlock Text="Projects Root (PROJECTS_ROOT)" Margin="0,0,0,4" Foreground="#A6ADC8"/>
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="TxtProjectsRoot" Grid.Column="0"/>
-                            <Button x:Name="BtnBrowseProjectsRoot" Grid.Column="1" Content="Browse Folder..." Margin="8,0,0,0"/>
-                        </Grid>
 
                         <TextBlock Text="Configured Project Aliases" Margin="0,0,0,4" Foreground="#A6ADC8"/>
-                        <ListView x:Name="LvProjects" Height="150" Background="#1E1E2E" Foreground="#CDD6F4" BorderBrush="#45475A" Margin="0,0,0,8">
+                        <ListView x:Name="LvProjects" Height="190" Background="#1E1E2E" Foreground="#CDD6F4" BorderBrush="#45475A" Margin="0,0,0,8">
                             <ListView.View>
                                 <GridView>
                                     <GridViewColumn Header="Alias" Width="140" DisplayMemberBinding="{Binding Alias}"/>
-                                    <GridViewColumn Header="Relative Path (inside PROJECTS_ROOT)" Width="460" DisplayMemberBinding="{Binding Path}"/>
+                                    <GridViewColumn Header="Project Path" Width="460" DisplayMemberBinding="{Binding Path}"/>
                                 </GridView>
                             </ListView.View>
                         </ListView>
@@ -478,7 +482,7 @@ function Show-FolderDialog {
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="TxtNewAlias" Grid.Column="0" ToolTip="Alias (e.g. app)"/>
-                            <TextBox x:Name="TxtNewProjPath" Grid.Column="2" ToolTip="Relative path (e.g. my-app/web)"/>
+                            <TextBox x:Name="TxtNewProjPath" Grid.Column="2" ToolTip="Project path (e.g. /c/dev/projects/my-app/web)"/>
                             <Button x:Name="BtnBrowseProjectSubdir" Grid.Column="3" Content="..." Margin="6,0,0,0" ToolTip="Pick project folder"/>
                             <Button x:Name="BtnAddProject" Grid.Column="4" Content="Add" Margin="6,0,0,0"/>
                             <Button x:Name="BtnRemoveProject" Grid.Column="5" Content="Remove" Margin="6,0,0,0"/>
@@ -541,8 +545,6 @@ $chkShowGemini         = $window.FindName("ChkShowGemini")
 $pwdDeepSeek           = $window.FindName("PwdDeepSeek")
 $txtDeepSeekVisible    = $window.FindName("TxtDeepSeekVisible")
 $chkShowDeepSeek       = $window.FindName("ChkShowDeepSeek")
-$txtProjectsRoot       = $window.FindName("TxtProjectsRoot")
-$btnBrowseProjectsRoot = $window.FindName("BtnBrowseProjectsRoot")
 $lvProjects            = $window.FindName("LvProjects")
 $txtNewAlias           = $window.FindName("TxtNewAlias")
 $txtNewProjPath        = $window.FindName("TxtNewProjPath")
@@ -590,7 +592,6 @@ $txtOpenRouterModel.Text = $initial.OpenRouterModel
 $pwdOpenRouter.Password = $initial.OpenRouterApiKey
 $pwdGemini.Password = $initial.GeminiApiKey
 $pwdDeepSeek.Password = $initial.DeepSeekApiKey
-$txtProjectsRoot.Text = $initial.ProjectsRoot
 
 $projectsCollection = [System.Collections.ObjectModel.ObservableCollection[PSCustomObject]]::new()
 foreach ($p in $initial.ProjectPaths) { $projectsCollection.Add($p) }
@@ -644,24 +645,11 @@ $btnBrowseAzureKey.Add_Click({
 
 $btnClearAzureKey.Add_Click({ $txtAzureSshKey.Text = "" })
 
-$btnBrowseProjectsRoot.Add_Click({
-    $winCurrent = Convert-GitBashPathToWindows $txtProjectsRoot.Text
-    $folder = Show-FolderDialog -Description "Select Projects Root Folder" -InitialPath $winCurrent
-    if ($folder) {
-        $txtProjectsRoot.Text = Convert-WindowsPathToGitBash $folder
-    }
-})
-
 $btnBrowseProjectSubdir.Add_Click({
-    $winRoot = Convert-GitBashPathToWindows $txtProjectsRoot.Text
-    $folder = Show-FolderDialog -Description "Select Project Folder" -InitialPath $winRoot
+    $initialDir = if (Test-Path "C:\dev\projects") { "C:\dev\projects" } elseif (Test-Path "C:\dev") { "C:\dev" } else { $HomeDir }
+    $folder = Show-FolderDialog -Description "Select Project Folder" -InitialPath $initialDir
     if ($folder) {
-        if (-not [string]::IsNullOrWhiteSpace($winRoot) -and $folder.StartsWith($winRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $rel = $folder.Substring($winRoot.Length).TrimStart('\', '/') -replace '\\', '/'
-            $txtNewProjPath.Text = $rel
-        } else {
-            $txtNewProjPath.Text = Convert-WindowsPathToGitBash $folder
-        }
+        $txtNewProjPath.Text = Convert-WindowsPathToGitBash $folder
         if ([string]::IsNullOrWhiteSpace($txtNewAlias.Text)) {
             $txtNewAlias.Text = (Split-Path $folder -Leaf).ToLowerInvariant()
         }
@@ -672,7 +660,7 @@ $btnAddProject.Add_Click({
     $alias = $txtNewAlias.Text.Trim()
     $path = ($txtNewProjPath.Text.Trim() -replace '\\', '/')
     if ([string]::IsNullOrWhiteSpace($alias) -or [string]::IsNullOrWhiteSpace($path)) {
-        [System.Windows.MessageBox]::Show("Please enter both an alias and a relative path.", "Validation", "OK", "Warning") | Out-Null
+        [System.Windows.MessageBox]::Show("Please enter both an alias and a project path.", "Validation", "OK", "Warning") | Out-Null
         return
     }
     for ($i = 0; $i -lt $projectsCollection.Count; $i++) {
@@ -728,7 +716,6 @@ $btnInstall.Add_Click({
             OpenRouterApiKey  = Get-SecretValue $pwdOpenRouter $txtOpenRouterVisible $chkShowOpenRouter
             GeminiApiKey      = Get-SecretValue $pwdGemini $txtGeminiVisible $chkShowGemini
             DeepSeekApiKey    = Get-SecretValue $pwdDeepSeek $txtDeepSeekVisible $chkShowDeepSeek
-            ProjectsRoot      = $txtProjectsRoot.Text.Trim()
             ProjectPaths      = $projectsCollection
         }
 

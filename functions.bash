@@ -14,7 +14,7 @@ gitwho() {
 _proj_usage() {
     echo "Usage: proj <project_alias>"
     echo ""
-    echo "Available projects in \$PROJECTS_ROOT (${PROJECTS_ROOT:-not set}):"
+    echo "Available projects:"
 
     # Get all keys from associative array
     local keys=("${!PROJECT_PATHS[@]}")
@@ -30,32 +30,39 @@ _proj_usage() {
 
 # Dynamic project navigation - quickly jump to configured project directories
 proj() {
-    if [ -z "${PROJECTS_ROOT:-}" ]; then
-        echo "❌ Error: \$PROJECTS_ROOT is not set. Please define it in ~/.bashrc.local"
-        return 1
-    fi
-
     if [ -z "${1:-}" ]; then
         _proj_usage
         return 1
     fi
 
     local alias_name="$1"
-    local relative_path="${PROJECT_PATHS[$alias_name]:-}"
+    local project_path="${PROJECT_PATHS[$alias_name]:-}"
 
-    if [ -n "$relative_path" ]; then
-        local target_dir="$PROJECTS_ROOT/$relative_path"
-        if [ -d "$target_dir" ]; then
-            cd "$target_dir" || return
-            echo "🔀 Changed to: $(pwd)"
-        else
-            echo "❌ Error: Directory $target_dir does not exist."
-            return 1
-        fi
-    else
+    if [ -z "$project_path" ]; then
         echo "❌ Error: Unknown project alias '$alias_name'"
         echo ""
         _proj_usage
+        return 1
+    fi
+
+    local target_dir
+    if [[ "$project_path" == /* || "$project_path" =~ ^[A-Za-z]:[/\\] ]]; then
+        target_dir="$project_path"
+    elif [[ "$project_path" == "~" || "$project_path" == "~/"* ]]; then
+        target_dir="${project_path/#\~/$HOME}"
+    else
+        if [ -z "${PROJECTS_ROOT:-}" ]; then
+            echo "❌ Error: \$PROJECTS_ROOT is not set. Please define it in ~/.bashrc.local"
+            return 1
+        fi
+        target_dir="${PROJECTS_ROOT%/}/$project_path"
+    fi
+
+    if [ -d "$target_dir" ]; then
+        cd "$target_dir" || return
+        echo "🔀 Changed to: $(pwd)"
+    else
+        echo "❌ Error: Directory $target_dir does not exist."
         return 1
     fi
 }

@@ -41,8 +41,6 @@ dev() {
         cd "/mnt/c/dev" || return
     elif [ -d "$HOME/dev" ]; then
         cd "$HOME/dev" || return
-    elif [ -n "${PROJECTS_ROOT:-}" ] && [ -d "$PROJECTS_ROOT" ]; then
-        cd "$PROJECTS_ROOT" || return
     else
         echo "❌ Development directory not found (/c/dev, /mnt/c/dev, or ~/dev)"
         return 1

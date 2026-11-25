@@ -24,7 +24,7 @@ cd dotfiles
   ```bash
   ./install.sh
   ```
-  The installer will interactively ask for your Git identity, SSH keys, projects root, and optional AI/GitReview API keys on first run.
+  The installer will interactively ask for your Git identity, SSH keys, and optional AI/GitReview API keys on first run.
   * To re-run the interactive configuration later, use `./install.sh --reconfigure`.
   * For automated / headless installation, set `NONINTERACTIVE=1 ./install.sh` or `CI=1 ./install.sh` (optionally passing `GIT_USER_NAME`, `GIT_USER_EMAIL`, etc. via environment variables).
 
@@ -72,7 +72,7 @@ Quickly jump to registered project directories from anywhere:
 * `proj` — display all configured project aliases and their paths.
 * `proj syn` — jump directly to the project (e.g., `/c/dev/projects/synthesis_newdesign/web`).
 
-Aliases and relative paths are configured in `~/.bashrc.local` via the `PROJECT_PATHS` associative array.
+Aliases and project paths are configured in `~/.bashrc.local` via the `PROJECT_PATHS` associative array.
 
 ### 2. Git Identity Check (`gitwho`)
 Inspect the effective Git name and email, along with their configuration sources:

@@ -22,7 +22,6 @@ fi
 # Default environment
 # ====================================================
 
-export PROJECTS_ROOT="${PROJECTS_ROOT:-/c/dev/projects}"
 export HISTSIZE=10000
 export HISTFILESIZE=20000
 export HISTCONTROL=ignoreboth
