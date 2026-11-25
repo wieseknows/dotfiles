@@ -15,45 +15,21 @@ git clone https://github.com/wieseknows/dotfiles.git
 cd dotfiles
 ```
 
-### Step 2. Create and customize `.bashrc.local`
+### Step 2. Run the installer
 
-```bash
-cp .bashrc.local.template ~/.bashrc.local
-```
-*(If you skip this step, `install.sh` will automatically create this file from the template on first run).*
-
-Open `~/.bashrc.local` in your favorite editor and set your details:
-
-```bash
-# 1. Git Identity (install.sh automatically writes this to Git — no need to edit .gitconfig.local!)
-export GIT_USER_NAME="Your Name"
-export GIT_USER_EMAIL="your.email@example.com"
-
-# 2. Paths to private SSH keys (in OpenSSH format)
-SSH_KEYS=(
-    "/c/dev/private_key"
-    "$HOME/.ssh/id_ed25519_personal"
-    "$HOME/.ssh/id_rsa"
-)
-
-# 3. API Keys & AI tools
-export OPENROUTER_API_KEY="sk-..."
-export PROJECTS_ROOT="/c/dev/projects"
-```
-
-### Step 3. Run the installer
-
+* **Windows (GUI Setup Wizard — recommended):** simply double-click **`install.bat`**.
+  The graphical wizard lets you enter your Git name/email, browse and pick SSH keys and project folders, enter API keys securely, and toggle optional tools — without editing any `.local` files by hand.
+  *(To run the console installer on Windows, use `install.bat --cli`).*
 * **From terminal (Git Bash / Linux):**
   ```bash
   ./install.sh
   ```
   *(For automated / headless installation, set `NONINTERACTIVE=1 ./install.sh` or `CI=1 ./install.sh`).*
-* **Or in Windows Explorer:** simply double-click **`install.bat`**.
 
 > [!NOTE]
-> The console window **will not close automatically** after installation finishes — you can comfortably inspect all validation and setup logs before pressing Enter to exit.
+> If you prefer manual configuration, you can copy `.bashrc.local.template` to `~/.bashrc.local` and edit it before running `./install.sh`.
 
-### Step 4. Reload Bash
+### Step 3. Reload Bash
 
 ```bash
 source ~/.bashrc
@@ -149,7 +125,8 @@ dotfiles/
 ├── aliases.bash             # Daily shell aliases and shortcuts
 ├── functions.bash           # Shell functions (proj, gitwho, mkcd, findf, findd)
 ├── install.sh               # Smart idempotent installer (Bash)
-├── install.bat              # One-click launcher for Windows Explorer
+├── install-gui.ps1          # Windows WPF GUI Setup Wizard
+├── install.bat              # One-click launcher for Windows Explorer (GUI / --cli)
 └── README.md                # Documentation
 ```
 

@@ -21,8 +21,12 @@ agent_pid
 
 # IDE
 .vscode/
+.vs/
 .idea/
 *.iml
+
+# Agent logs
+.agents/
 
 # OS files
 .DS_Store

@@ -91,9 +91,7 @@ fi
 # ----------------------------------------------------
 # 4. Configure local Git settings (~/.gitconfig.local)
 # ----------------------------------------------------
-if [ -f "$HOME/.gitconfig.local" ]; then
-    echo "ℹ️  $HOME/.gitconfig.local exists (preserving existing configuration)"
-else
+if [ ! -f "$HOME/.gitconfig.local" ]; then
     if [ -f "$DOTFILES_DIR/.gitconfig.local.template" ]; then
         cp "$DOTFILES_DIR/.gitconfig.local.template" "$HOME/.gitconfig.local"
         echo "⚠️  Created ~/.gitconfig.local from template"
@@ -101,7 +99,12 @@ else
         touch "$HOME/.gitconfig.local"
         echo "ℹ️  Created empty ~/.gitconfig.local"
     fi
+    FORCE_SYNC_GIT_IDENTITY=1
+else
+    echo "ℹ️  $HOME/.gitconfig.local exists"
+fi
 
+if [ "${FORCE_SYNC_GIT_IDENTITY:-0}" = "1" ]; then
     # Sync git identity if configured in environment / .bashrc.local
     if [ -n "${GIT_USER_NAME:-}" ]; then
         git config --file "$HOME/.gitconfig.local" user.name "$GIT_USER_NAME"
@@ -182,19 +185,23 @@ else
 fi
 
 # ----------------------------------------------------
-# 7. Install / Update GitReview dotnet tool
+# 7. Install / Update GitReview dotnet tool (optional)
 # ----------------------------------------------------
-echo "🔍 Checking for .NET CLI & GitReview tool..."
-if command -v dotnet >/dev/null 2>&1; then
-    if dotnet tool list -g | grep -q "wieseknows.gitreview"; then
-        echo "🔄 Updating wieseknows.GitReview tool..."
-        dotnet tool update -g wieseknows.GitReview || echo "⚠️ Failed to update GitReview tool"
+if [ "${INSTALL_GITREVIEW:-1}" = "1" ]; then
+    echo "🔍 Checking for .NET CLI & GitReview tool..."
+    if command -v dotnet >/dev/null 2>&1; then
+        if dotnet tool list -g | grep -q "wieseknows.gitreview"; then
+            echo "🔄 Updating wieseknows.GitReview tool..."
+            dotnet tool update -g wieseknows.GitReview || echo "⚠️ Failed to update GitReview tool"
+        else
+            echo "📦 Installing wieseknows.GitReview tool..."
+            dotnet tool install -g wieseknows.GitReview || echo "⚠️ Failed to install GitReview tool"
+        fi
     else
-        echo "📦 Installing wieseknows.GitReview tool..."
-        dotnet tool install -g wieseknows.GitReview || echo "⚠️ Failed to install GitReview tool"
+        echo "⚠️ .NET SDK (dotnet) not found in PATH. Skipping GitReview installation."
     fi
 else
-    echo "⚠️ .NET SDK (dotnet) not found in PATH. Skipping GitReview installation."
+    echo "ℹ️  Skipping GitReview installation (INSTALL_GITREVIEW=0)"
 fi
 
 # ----------------------------------------------------
