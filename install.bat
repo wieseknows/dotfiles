@@ -1,8 +1,23 @@
 @echo off
 setlocal enabledelayedexpansion
 title Dotfiles Installer
+
+if /I "%~1"=="--cli" (
+    shift
+    goto :cli_mode
+)
+
+where powershell.exe >nul 2>&1
+if %ERRORLEVEL%==0 (
+    echo Launching Dotfiles GUI Setup Wizard...
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File "%~dp0install-gui.ps1"
+    if %ERRORLEVEL%==0 exit /b 0
+    echo [WARN] GUI installer exited with code %ERRORLEVEL%. Falling back to CLI mode...
+)
+
+:cli_mode
 echo ==================================================
-echo  Starting Dotfiles Installation...
+echo  Starting Dotfiles Installation (CLI)...
 echo ==================================================
 
 set "GIT_BASH="
@@ -26,4 +41,5 @@ if not defined GIT_BASH (
     exit /b 1
 )
 
-"!GIT_BASH!" "%~dp0install.sh"
+set "PAUSE_ON_EXIT=1"
+"!GIT_BASH!" "%~dp0install.sh" %1 %2 %3 %4 %5

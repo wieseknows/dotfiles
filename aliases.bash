@@ -12,8 +12,8 @@ alias home='cd ~'
 alias cls='clear'
 alias c='clear'
 alias grep='grep --color=auto'
-alias egrep='egrep --color=auto'
-alias fgrep='fgrep --color=auto'
+alias egrep='grep -E --color=auto'
+alias fgrep='grep -F --color=auto'
 
 # Git shortcuts (additional to git aliases)
 alias g='git'
@@ -30,4 +30,19 @@ alias gb='git branch'
 alias desk='cd ~/Desktop'
 alias down='cd ~/Downloads'
 alias docs='cd ~/Documents'
-alias dev='cd /c/dev'
+
+# Cross-platform development directory navigation
+dev() {
+    if [ -n "${DEV_DIR:-}" ] && [ -d "$DEV_DIR" ]; then
+        cd "$DEV_DIR" || return
+    elif [ -d "/c/dev" ]; then
+        cd "/c/dev" || return
+    elif [ -d "/mnt/c/dev" ]; then
+        cd "/mnt/c/dev" || return
+    elif [ -d "$HOME/dev" ]; then
+        cd "$HOME/dev" || return
+    else
+        echo "❌ Development directory not found (/c/dev, /mnt/c/dev, or ~/dev)"
+        return 1
+    fi
+}
