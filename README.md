@@ -20,6 +20,8 @@ cd dotfiles
 * **Windows (GUI Setup Wizard — recommended):** simply double-click **`install.bat`**.
   The graphical wizard lets you enter your Git name/email, browse and pick SSH keys and project folders, enter API keys securely, and toggle optional tools.
   *(To run the interactive console installer on Windows, use `install.bat --cli`).*
+
+  ![Dotfiles Setup Wizard](assets/setup-wizard.png)
 * **From terminal (Git Bash / Linux):**
   ```bash
   ./install.sh
@@ -116,6 +118,8 @@ The installer detects .NET SDK and installs or updates the global CLI tool `wies
 
 ```text
 dotfiles/
+├── assets/
+│   └── setup-wizard.png   # GUI Setup Wizard screenshot
 ├── .bashrc                  # Main shell environment loader and SSH Agent manager
 ├── .gitattributes           # Git repository configuration enforcing LF line endings
 ├── .gitconfig               # Shared public Git aliases and defaults
