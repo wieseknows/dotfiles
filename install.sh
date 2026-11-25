@@ -17,8 +17,10 @@ backup_if_exists() {
     local target="$1"
     if [ -f "$target" ] && [ ! -L "$target" ]; then
         local backup="${target}.bak.${TIMESTAMP}"
-        cp "$target" "$backup"
-        echo "📦 Backed up $target -> $backup"
+        if [ ! -f "$backup" ]; then
+            cp "$target" "$backup"
+            echo "📦 Backed up $target -> $backup"
+        fi
     fi
 }
 
@@ -27,6 +29,60 @@ backup_if_exists() {
 # ----------------------------------------------------
 LOADER_START="# >>> dotfiles loader >>>"
 LOADER_END="# <<< dotfiles loader <<<"
+LEGACY_MARKER="# AUTO-GENERATED LOADER FOR DOTFILES"
+
+if [ -f "$HOME/.bashrc" ] && grep -Fq "$LEGACY_MARKER" "$HOME/.bashrc"; then
+    backup_if_exists "$HOME/.bashrc"
+    tmp_bashrc="$(mktemp)"
+    awk '
+        /^# =+$/ {
+            if (in_legacy) {
+                if (seen_fi) {
+                    in_legacy = 0
+                    skip_blank = 1
+                }
+                next
+            }
+            prev_sep = $0
+            next
+        }
+        prev_sep != "" && /^# AUTO-GENERATED LOADER FOR DOTFILES$/ {
+            in_legacy = 1
+            seen_fi = 0
+            prev_sep = ""
+            next
+        }
+        prev_sep != "" {
+            print prev_sep
+            prev_sep = ""
+        }
+        in_legacy {
+            if (/^# >>> dotfiles loader >>>$/) {
+                in_legacy = 0
+                print
+                next
+            }
+            if (/^fi$/) {
+                seen_fi = 1
+            }
+            next
+        }
+        skip_blank && /^$/ {
+            skip_blank = 0
+            next
+        }
+        {
+            skip_blank = 0
+            print
+        }
+        END {
+            if (prev_sep != "") {
+                print prev_sep
+            }
+        }
+    ' "$HOME/.bashrc" > "$tmp_bashrc" && mv "$tmp_bashrc" "$HOME/.bashrc"
+    echo "🧹 Removed legacy dotfiles loader from $HOME/.bashrc"
+fi
 
 if [ -f "$HOME/.bashrc" ] && grep -Fq "$LOADER_START" "$HOME/.bashrc"; then
     echo "ℹ️  Dotfiles loader already present in $HOME/.bashrc"
@@ -205,8 +261,21 @@ else
 fi
 
 # ----------------------------------------------------
-# 8. Windows-specific sanity checks (GIT_SSH hijack)
+# 8. Sanity checks (GIT_SSH hijack, duplicates, tracked secrets)
 # ----------------------------------------------------
+if [ -f "$HOME/.bashrc" ]; then
+    loader_count=$(grep -cE 'source[[:space:]]+.*DOTFILES_DIR/\.bashrc' "$HOME/.bashrc" 2>/dev/null || true)
+    if [ "${loader_count:-0}" -gt 1 ]; then
+        echo "🚨 WARNING: Multiple dotfiles loaders ($loader_count) detected in $HOME/.bashrc."
+        echo "    Remove duplicate blocks so ~/.bashrc only sources dotfiles once."
+    fi
+fi
+
+include_count=$(git config --global --get-all include.path 2>/dev/null | grep -F -c -e "$DOTFILES_GITCONFIG" -e "$DOTFILES_GITCONFIG_WIN" || true)
+if [ "${include_count:-0}" -gt 1 ]; then
+    echo "🚨 WARNING: Duplicate Git include.path entries ($include_count) for $DOTFILES_GITCONFIG in ~/.gitconfig."
+fi
+
 if [ -n "${GIT_SSH:-}" ]; then
     echo "🚨 WARNING: GIT_SSH is set to: $GIT_SSH"
     echo "    If this points at TortoiseGitPlink, OpenSSH ssh-agent keys won't be used."
